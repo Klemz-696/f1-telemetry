@@ -7,9 +7,12 @@
 [![InfluxDB v2](https://img.shields.io/badge/InfluxDB-2.7-22ADF6.svg?logo=influxdb&logoColor=white)](https://www.influxdata.com/)
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-v2+-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Architecture](https://img.shields.io/badge/Architecture-Event--Driven-orange.svg)]()
+[![Documentation FR](https://img.shields.io/badge/Dossier_Technique-Fran%C3%A7ais-blue.svg)](docs/PRESENTATION_FR.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **All-in-one Formula 1 Real-Time Telemetry, Live Timing Tower, 2D/3D Track Map, Race Simulation Engine, Audio Synthesizer, and Broadcast Overlays for Season 2026.**
+
+📖 *Pour la documentation détaillée et le dossier technique en français, voir [docs/PRESENTATION_FR.md](docs/PRESENTATION_FR.md).*
 
 ---
 
@@ -79,7 +82,7 @@ Get the complete F1 Telemetry stack up and running in **under 1 minute**:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/f1-telemetry.git
+git clone https://github.com/Klemz-696/f1-telemetry.git
 cd f1-telemetry
 ```
 
@@ -181,11 +184,13 @@ python setup.py --clean        # Purge temporary proxy cache files
 
 ## 📚 Documentation Index
 
+- [🇫🇷 Dossier Technique Complet (Français)](docs/PRESENTATION_FR.md)
 - [🏛️ Architecture & Data Pipelines](docs/ARCHITECTURE.md)
 - [📡 API & WebSocket Reference](docs/API.md)
 - [📺 OBS & Streaming Overlays Setup](docs/STREAMING_OVERLAYS.md)
 - [🔑 F1 TV Token Capture Tutorial](docs/F1_LIVE_TOKEN_GUIDE.md)
 - [💻 Local Development Guide](docs/DEVELOPMENT.md)
+- [🚀 GitHub Setup Guide](docs/GITHUB_SETUP_GUIDE.md)
 - [🤝 Contributing Guidelines](CONTRIBUTING.md)
 - [🛡️ Security Policy](SECURITY.md)
 
@@ -212,5 +217,5 @@ This project is open-source software licensed under the **[MIT License](LICENSE)
 ---
 
 <p align="center">
-  <b>Built with ❤️ for Formula 1 fans and telemetry enthusiasts around the world 🏎️💨</b>
+  <b>Built with ❤️ for Formula 1 fans, developers, and telemetry enthusiasts around the world 🏎️💨</b>
 </p>
