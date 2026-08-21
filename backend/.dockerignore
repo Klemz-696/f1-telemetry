@@ -1,0 +1,34 @@
+# Hygiène de build — backend
+# Aucun secret n'est censé vivre ici (.env reste à la racine du dépôt pour
+# la substitution compose), mais on exclut par prévention tout .env placé par
+# erreur dans backend/, ainsi que les artefacts locaux inutiles dans l'image.
+
+# Secrets / config locale — ne jamais baker dans l'image
+.env
+.env.*
+*.pem
+*.key
+
+# Artefacts Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Runtime / données locales
+cache/
+.cache/
+shared/
+*.log
+
+# VCS & meta
+.git
+.gitignore
+.gitattributes
+Dockerfile
+.dockerignore

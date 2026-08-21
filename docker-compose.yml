@@ -1,0 +1,208 @@
+networks:
+  net_egress:
+    driver: bridge
+  net_internal:
+    driver: bridge
+    internal: true
+  net_frontend:
+    driver: bridge
+
+volumes:
+  influxdb_data:
+  influxdb_config:
+  f1_state:
+
+services:
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: f1_influxdb
+    restart: unless-stopped
+    networks:
+      - net_internal
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUX_USER}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUX_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=f1telemetry
+      - DOCKER_INFLUXDB_INIT_BUCKET=livetiming
+      - DOCKER_INFLUXDB_INIT_RETENTION=168h
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUX_TOKEN}
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: f1_consumer
+    restart: unless-stopped
+    networks:
+      - net_internal
+      - net_egress
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - f1_state:/shared
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=f1telemetry
+      - INFLUX_BUCKET=livetiming
+      - F1_AUTH_TOKEN=${F1_AUTH_TOKEN}
+      - F1_STATE_DIR=/shared
+    command: python consumer.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  openf1_sync:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: f1_openf1_sync
+    restart: unless-stopped
+    networks:
+      - net_internal
+      - net_egress
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=f1telemetry
+      - INFLUX_BUCKET=livetiming
+    command: python openf1_sync.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  standings_sync:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: f1_standings_sync
+    restart: unless-stopped
+    networks:
+      - net_egress
+    volumes:
+      - f1_state:/shared
+    environment:
+      - F1_STATE_DIR=/shared
+    command: python standings_sync.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
+  results_sync:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: f1_results_sync
+    restart: unless-stopped
+    networks:
+      - net_egress
+    volumes:
+      - f1_state:/shared
+    environment:
+      - F1_STATE_DIR=/shared
+    command: python results_sync.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: f1_api
+    restart: unless-stopped
+    networks:
+      - net_internal
+      - net_frontend
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      consumer:
+        condition: service_started
+    volumes:
+      - f1_state:/shared
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=f1telemetry
+      - INFLUX_BUCKET=livetiming
+      - F1_STATE_DIR=/shared
+      # C1 : liste d'origines autorisées (CORS FastAPI) depuis .env.
+      # Si vide, main.py retombe sur ["*"] (pas de régression, mais non durci).
+      - API_ALLOWED_ORIGINS=${API_ALLOWED_ORIGINS}
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:alpine
+    container_name: f1_nginx
+    restart: unless-stopped
+    networks:
+      - net_frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  proxy:
+    build:
+      context: ./proxy-server
+      dockerfile: Dockerfile
+    container_name: f1_proxy
+    restart: unless-stopped
+    networks:
+      - net_frontend
+      - net_egress
+    volumes:
+      - ./proxy-server/cache:/cache
+    environment:
+      # G1 : la prod / hardening CORS+WS + protection /flush proviennent du .env
+      # (si absent, server.js retombe sur ses valeurs par défaut — pas de régression).
+      - NODE_ENV=production
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - FLUSH_TOKEN=${FLUSH_TOKEN}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

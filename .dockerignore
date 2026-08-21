@@ -1,0 +1,38 @@
+# Hygiène de build — contexte racine (builds futurs context: ".")
+# Aucun service ne bâtie aujourd'hui depuis la racine, mais on protège le futur
+# contre le bake de secrets et la pollution du contexte de build.
+
+# Secrets — priorité absolue
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+secrets/
+
+# Artefacts Python (hérités de backend/)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+
+# Artefacts Node (hérités de proxy-server/)
+**/node_modules/
+
+# Données & caches runtime
+**/cache/
+**/.cache/
+**/shared/
+**/*.log
+
+# VCS & meta
+.git
+.gitignore
+.gitattributes
+.vscode/
+.idea/

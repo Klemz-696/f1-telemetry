@@ -1,0 +1,22 @@
+# Hygiène de build — proxy
+# Le Dockerfile ne copie que package.json + server.js, mais on verrouille quand
+# même : zéro dépendance, zéro secret, zéro artefact dans l'image.
+
+# Secrets / config locale
+.env
+.env.*
+*.pem
+*.key
+
+# Artefacts Node & données locales
+node_modules/
+cache/
+.cache/
+*.log
+
+# VCS & meta
+.git
+.gitignore
+.gitattributes
+Dockerfile
+.dockerignore

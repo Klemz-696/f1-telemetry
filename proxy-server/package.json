@@ -1,0 +1,15 @@
+{
+  "name": "f1-cache-proxy",
+  "version": "2.0.0",
+  "description": "Proxy de cache pour OpenF1 et Jolpica — élimine les erreurs 429",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "keywords": ["f1", "openf1", "cache", "proxy"]
+}

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>F1 Dashboard 2026</title>
+  <meta name="description" content="Dashboard F1 2026 : résultats, calendrier, classements, télémétrie et bien plus." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <nav id="nav">
+    <div class="nav-brand">
+      <span class="nav-dot"></span>
+      <span class="nav-title">F1 HUB</span>
+    </div>
+    <div class="nav-links">
+      <a href="#home"       class="nav-link" id="nav-home"><span class="nav-icon">🏠</span> ACCUEIL</a>
+      <a href="#results"    class="nav-link" id="nav-results"><span class="nav-icon">🏁</span> RÉSULTATS</a>
+      <a href="#calendar"   class="nav-link" id="nav-calendar"><span class="nav-icon">📅</span> CALENDRIER</a>
+      <a href="#standings"  class="nav-link" id="nav-standings"><span class="nav-icon">🏆</span> CLASSEMENTS</a>
+      <a href="#telemetry"  class="nav-link" id="nav-live"><span class="nav-icon">📡</span> LIVE</a>
+    </div>
+    <div class="nav-controls">
+      <button id="mode-toggle-btn" class="mode-toggle-btn" title="Changer de mode">🔄 AUTO ▾</button>
+      <div id="mode-dropdown" class="mode-dropdown" hidden>
+        <button class="mode-drop-item" data-mode="auto">🔄 Auto <span class="mode-drop-hint">Détection automatique</span></button>
+        <button class="mode-drop-item" data-mode="live">📡 Direct <span class="mode-drop-hint">API temps réel</span></button>
+        <button class="mode-drop-item" data-mode="simulation">🎮 Simulation <span class="mode-drop-hint">Données fictives</span></button>
+        <button class="mode-drop-item" data-mode="archive">📼 Archive <span class="mode-drop-hint">Dernière session</span></button>
+        <button class="mode-drop-item" data-mode="offline">✈ Hors-ligne <span class="mode-drop-hint">Calendrier & classements</span></button>
+      </div>
+      <button id="schedule-toggle" aria-label="Horaires week-end" title="Horaires du week-end" hidden>📋</button>
+      <button id="settings-toggle" aria-label="Paramètres">⚙</button>
+      <button id="hamburger-btn" aria-label="Menu" aria-expanded="false" aria-controls="mobile-drawer">☰</button>
+    </div>
+  </nav>
+
+  <div id="mobile-drawer" aria-hidden="true">
+    <div class="drawer-nav-links">
+      <a href="#home"       class="nav-link drawer-link" id="drawer-home"><span class="nav-icon">🏠</span> ACCUEIL</a>
+      <a href="#results"    class="nav-link drawer-link" id="drawer-results"><span class="nav-icon">🏁</span> RÉSULTATS</a>
+      <a href="#calendar"   class="nav-link drawer-link" id="drawer-calendar"><span class="nav-icon">📅</span> CALENDRIER</a>
+      <a href="#standings"  class="nav-link drawer-link" id="drawer-standings"><span class="nav-icon">🏆</span> CLASSEMENTS</a>
+      <a href="#telemetry"  class="nav-link drawer-link" id="drawer-live"><span class="nav-icon">📡</span> LIVE</a>
+    </div>
+    <div class="drawer-footer">
+      <div class="drawer-mode-row">
+        <button class="mode-drop-item drawer-mode-item" data-mode="auto">🔄 Auto</button>
+        <button class="mode-drop-item drawer-mode-item" data-mode="live">📡 Direct</button>
+        <button class="mode-drop-item drawer-mode-item" data-mode="simulation">🎮 Simulation</button>
+        <button class="mode-drop-item drawer-mode-item" data-mode="archive">📼 Archive</button>
+        <button class="mode-drop-item drawer-mode-item" data-mode="offline">✈ Hors-ligne</button>
+      </div>
+      <button id="drawer-settings-btn" aria-label="Paramètres">⚙️ Paramètres</button>
+    </div>
+  </div>
+  <div id="drawer-backdrop"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Vue Accueil                                                            -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="view-home" class="view active">
+    <div class="view-header home-view-header">
+      <h2>F1 Hub 2026</h2>
+    </div>
+
+    <!-- Hero : prochain GP -->
+    <section class="home-section home-hero-section">
+      <div id="home-hero" class="home-hero">
+        <div class="home-hero-skeleton">Chargement du calendrier…</div>
+      </div>
+    </section>
+
+    <!-- Quick nav -->
+    <section class="home-section">
+      <h3 class="home-section-title">Navigation rapide</h3>
+      <div id="home-nav-grid" class="home-nav-grid"></div>
+    </section>
+
+    <!-- Dernière course -->
+    <section class="home-section">
+      <h3 class="home-section-title">Dernière course</h3>
+      <div id="home-last-race" class="home-last-race">
+        <div class="home-section-empty">Chargement…</div>
+      </div>
+    </section>
+
+    <!-- Mini classements -->
+    <section class="home-section home-standings-section">
+      <div class="home-mini-block">
+        <h3 class="home-section-title">Pilotes</h3>
+        <div id="home-mini-drivers" class="home-mini-standings"></div>
+        <a href="#standings" class="home-see-all" id="home-see-drivers">Voir tout →</a>
+      </div>
+      <div class="home-mini-block">
+        <h3 class="home-section-title">Constructeurs</h3>
+        <div id="home-mini-teams" class="home-mini-standings"></div>
+        <a href="#standings" class="home-see-all" id="home-see-teams">Voir tout →</a>
+      </div>
+    </section>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Vue Télémétrie                                                         -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="view-telemetry" class="view">
+
+    <!-- ⚠️ Bannière : mode direct en pause -->
+    <div id="live-pause-notice" class="live-pause-notice">
+      <span class="lpn-icon">⚠️</span>
+      <div class="lpn-body">
+        <strong>Mode direct temporairement indisponible</strong>
+        <span>La F1 a mis en place des restrictions d'accès IP sur ses flux en temps réel. Les données live ne sont pas disponibles pour l'instant.</span>
+      </div>
+      <div class="lpn-actions">
+        <button class="lpn-btn" data-mode="simulation">🎮 Simulation</button>
+        <button class="lpn-btn" data-mode="archive">📼 Archive</button>
+        <button class="lpn-dismiss" id="lpn-dismiss" title="Fermer">✕</button>
+      </div>
+    </div>
+
+    <div id="session-banner">
+      <div class="sb-left">
+        <span id="sb-flag-country" class="sb-country-flag"></span>
+        <span id="sb-circuit" class="sb-circuit-name">—</span>
+        <span id="sb-sep">·</span>
+        <span id="sb-session-type" class="sb-badge-type">—</span>
+      </div>
+      <div class="sb-center">
+        <span id="sb-track-flag" class="flag-green sb-track-status">● VERT</span>
+        <span id="sb-laps" class="sb-laps hidden">TOUR <strong id="sb-lap-cur">—</strong>/<strong id="sb-lap-tot">—</strong></span>
+        <span id="sb-time-remaining" class="sb-remaining"></span>
+      </div>
+      <div class="sb-right">
+        <div class="sb-weather-group">
+          <span class="sb-w-icon">🌡</span><span id="sb-air">—°C</span>
+          <span class="sb-w-icon">🛣</span><span id="sb-track-temp">—°C</span>
+          <span class="sb-w-icon">💨</span><span id="sb-wind">—</span>
+          <span id="sb-rain" hidden>🌧</span>
+        </div>
+        <span id="sb-local-time" class="sb-local-time">—</span>
+        <span id="sb-session-key" class="sb-session-key"></span>
+      </div>
+    </div>
+
+    <div id="mobile-tabs" class="mobile-tabs">
+      <button class="mob-tab active" data-target="ov-timing" data-index="0">📊 Timing</button>
+      <button class="mob-tab" data-target="ov-map" data-index="1">🗺️ Carte</button>
+      <button class="mob-tab" data-target="ov-rc" data-index="2">🏁 Course</button>
+      <button class="mob-tab" data-target="ov-commentary" data-index="3">🎙️ Comm.</button>
+    </div>
+    <div id="tab-dots" class="tab-dots">
+      <span class="tab-dot active" data-index="0"></span>
+      <span class="tab-dot" data-index="1"></span>
+      <span class="tab-dot" data-index="2"></span>
+      <span class="tab-dot" data-index="3"></span>
+    </div>
+
+    <div id="dashboard">
+
+      <div class="dashboard-overlay" id="ov-timing">
+        <div class="ov-drag-handle">
+          <span class="ov-handle-label">⠿ TIMING</span>
+          <button class="ov-btn-font ov-btn-font-down" title="Réduire le texte">A−</button>
+          <button class="ov-btn-font ov-btn-font-up"   title="Agrandir le texte">A+</button>
+          <button class="ov-btn-front" title="Premier plan">▲</button>
+          <button class="ov-btn-back"  title="Arrière plan">▼</button>
+        </div>
+        <div class="ov-content" id="timing-tower">
+          <div class="tower-header">
+            <span>PILOTE</span><span>ÉCART</span>
+            <span>S1</span><span>S2</span><span>S3</span>
+            <span>TOUR</span><span>PNEU</span>
+            <span class="col-pos-delta hidden" id="col-pos-delta-header">POS±</span>
+          </div>
+          <div id="tower-rows"></div>
+        </div>
+        <div class="ov-resize-handle">⤡</div>
+      </div>
+
+      <div class="dashboard-overlay" id="ov-map">
+        <div class="ov-drag-handle">
+          <span class="ov-handle-label">⠿ CARTE</span>
+          <button class="ov-btn-front" title="Premier plan">▲</button>
+          <button class="ov-btn-back"  title="Arrière plan">▼</button>
+        </div>
+        <div class="ov-content" id="map-container">
+          <canvas id="track-canvas"></canvas>
+          <div id="session-info">
+            <span id="session-name">—</span>
+            <span id="track-flag" class="flag-green">●</span>
+          </div>
+        </div>
+        <div class="ov-resize-handle">⤡</div>
+      </div>
+
+      <div class="dashboard-overlay" id="ov-rc">
+        <div class="ov-drag-handle">
+          <span class="ov-handle-label">⠿ DIR. COURSE</span>
+          <button class="ov-btn-font ov-btn-font-down" title="Réduire le texte">A−</button>
+          <button class="ov-btn-font ov-btn-font-up"   title="Agrandir le texte">A+</button>
+          <button class="ov-btn-front" title="Premier plan">▲</button>
+          <button class="ov-btn-back"  title="Arrière plan">▼</button>
+        </div>
+        <div class="ov-content" id="race-control-panel">
+          <div class="rc-header"><span class="rc-header-icon">🏁</span> DIRECTION DE COURSE</div>
+          <div id="rc-messages"></div>
+        </div>
+        <div class="ov-resize-handle">⤡</div>
+      </div>
+
+      <div class="dashboard-overlay" id="ov-commentary">
+        <div class="ov-drag-handle">
+          <span class="ov-handle-label">⠿ COMMENTAIRES</span>
+          <button class="ov-btn-font ov-btn-font-down" title="Réduire le texte">A−</button>
+          <button class="ov-btn-font ov-btn-font-up"   title="Agrandir le texte">A+</button>
+          <button class="ov-btn-front" title="Premier plan">▲</button>
+          <button class="ov-btn-back"  title="Arrière plan">▼</button>
+        </div>
+        <div class="ov-content" id="commentary-panel">
+          <div class="rc-header"><span class="rc-header-icon">🎙️</span> COMMENTAIRES SESSION</div>
+          <div id="commentary-messages"></div>
+        </div>
+        <div class="ov-resize-handle">⤡</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Vue Résultats                                                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="view-results" class="view">
+    <div class="view-header results-header">
+      <h2>🏁 Résultats 2026</h2>
+      <p class="results-subtitle">Saison en cours — cliquer sur un GP pour voir les détails</p>
+    </div>
+    <div id="results-list" class="results-list">
+      <div class="res-loading">Chargement…</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Vue Calendrier                                                         -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="view-calendar" class="view">
+    <div class="view-header calendar-header">
+      <h2>🏎️ Calendrier 2026</h2>
+      <div class="calendar-legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#e10600"></span>Prochain</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#ffd700"></span>Sprint</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#444"></span>Annulé</span>
+      </div>
+    </div>
+    <div id="next-event-banner" hidden>
+      <div class="neb-gp">
+        <span class="neb-label">🏁 PROCHAIN GP — COURSE</span>
+        <span id="neb-gp-name">—</span>
+        <span id="neb-gp-countdown" class="neb-time">—</span>
+      </div>
+      <div class="neb-session">
+        <span class="neb-label">⏱️ PROCHAINE SÉANCE</span>
+        <span id="neb-session-name">—</span>
+        <span id="neb-session-countdown" class="neb-time">—</span>
+      </div>
+    </div>
+    <div id="calendar-grid"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Vue Classements                                                        -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="view-standings" class="view">
+    <div class="view-header">
+      <h2>🏆 Classements 2026</h2>
+      <div class="standings-tabs">
+        <button class="tab-btn active" data-tab="drivers">PILOTES</button>
+        <button class="tab-btn" data-tab="teams">ÉCURIES</button>
+      </div>
+    </div>
+    <div id="standings-drivers" class="standings-panel active"></div>
+    <div id="standings-teams"   class="standings-panel"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Overlay Paramètres                                                     -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="settings-backdrop" class="settings-backdrop" hidden></div>
+  <div id="settings-modal" class="settings-modal" hidden aria-modal="true" role="dialog" aria-hidden="true">
+    <div class="settings-modal-header">
+      <h2>⚙️ Paramètres</h2>
+      <button id="settings-close-btn" class="settings-close-btn" aria-label="Fermer">✕</button>
+    </div>
+    <div class="settings-page-body">
+
+      <div class="settings-section">
+        <div class="settings-section-title">Interface</div>
+        <div class="interface-row">
+          <span>Thème de couleurs</span>
+          <button id="theme-toggle" class="btn-sm">☽ Sombre</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Disposition des panneaux</div>
+        <p class="settings-hint">Sélectionnez une prédisposition puis cliquez Appliquer, ou activez le mode édition pour tout personnaliser.</p>
+        <div class="layout-presets-row">
+          <select id="layout-preset-select" class="settings-select" style="flex:1">
+            <option value="broadcast">📺 Broadcast (défaut)</option>
+            <option value="focus-map">🗺️ Focus carte</option>
+            <option value="minimal">🪶 Minimal</option>
+            <option value="custom" disabled>✏️ Personnalisé</option>
+          </select>
+          <button id="apply-preset-btn" class="btn-sm">Appliquer</button>
+        </div>
+        <div class="edit-mode-row">
+          <span>Mode édition des panneaux</span>
+          <button id="edit-mode-toggle" class="btn-sm">Activer</button>
+        </div>
+        <p class="settings-hint">En mode édition : glissez les panneaux par leur bandeau, redimensionnez depuis le coin ⤡.</p>
+        <div class="settings-section-subtitle">Visibilité</div>
+        <label class="toggle-row">
+          <span>Timing Tower</span>
+          <input type="checkbox" id="ov-vis-ov-timing" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Carte circuit</span>
+          <input type="checkbox" id="ov-vis-ov-map" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Direction de course</span>
+          <input type="checkbox" id="ov-vis-ov-rc" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Commentaires live</span>
+          <input type="checkbox" id="ov-vis-ov-commentary" checked />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Affichage</div>
+        <label class="toggle-row">
+          <span>Métriques voiture (Vitesse, RPM, Rapport)</span>
+          <input type="checkbox" id="pref-car-metrics" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Numéros de virage sur la carte</span>
+          <input type="checkbox" id="pref-corner-numbers" />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>En-tête du tableau de bord</span>
+          <input type="checkbox" id="pref-tower-header" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Meilleurs secteurs pilotes</span>
+          <input type="checkbox" id="pref-best-sectors" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Fond pur noir (OLED)</span>
+          <input type="checkbox" id="pref-oled" />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Couleurs Safety Car</span>
+          <input type="checkbox" id="pref-sc-colors" checked />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Sons</div>
+        <label class="toggle-row">
+          <span>Sons de l'interface (navigation, clics)</span>
+          <input type="checkbox" id="pref-ui-sound" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Sons d'événements (DRS, Safety Car…)</span>
+          <input type="checkbox" id="pref-event-sound" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Son sur nouveau message de direction de course</span>
+          <input type="checkbox" id="pref-rc-sound" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <div class="slider-row">
+          <span id="rc-vol-display">50</span>
+          <input type="range" id="pref-rc-volume" min="0" max="100" value="50" />
+          <span>Volume</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Pilotes épinglés</div>
+        <p class="settings-hint">Maintenez Ctrl/Cmd pour sélectionner plusieurs pilotes.</p>
+        <select id="pref-favorite-driver" class="settings-select" multiple size="6"></select>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Vitesse</div>
+        <div class="btn-group">
+          <button class="btn-choice active" data-unit="kmh">km/h</button>
+          <button class="btn-choice" data-unit="mph">mp/h</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Délai d'affichage</div>
+        <p class="settings-hint">Affiche les données N secondes après l'edge live.</p>
+        <div class="delay-row">
+          <button id="delay-pause" class="btn-sm">⏸</button>
+          <input type="number" id="pref-delay" min="0" max="3600" value="0" class="delay-input" />
+          <span>secondes</span>
+          <button id="delay-reset" class="btn-sm btn-red">Réinitialiser</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Affichage du circuit</div>
+        <p class="settings-hint">Choisissez comment le tracé du circuit est affiché sur la carte.</p>
+        <div class="radio-group">
+          <label class="radio-row">
+            <input type="radio" name="track-display-mode" value="api" />
+            <span class="radio-label">
+              <strong>Tracé API (OpenF1)</strong>
+              <span class="radio-hint">Télécharge le vrai tracé du circuit depuis l'historique GPS (recommandé)</span>
+            </span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="track-display-mode" value="imported" />
+            <span class="radio-label">
+              <strong>Fichier GeoJSON importé</strong>
+              <span class="radio-hint">Utilise un fichier de circuit au format GeoJSON LineString</span>
+            </span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="track-display-mode" value="legacy" />
+            <span class="radio-label">
+              <strong>Accumulation (legacy)</strong>
+              <span class="radio-hint">Reconstruit le tracé progressivement depuis les positions des pilotes</span>
+            </span>
+          </label>
+        </div>
+        <div id="track-import-section" hidden>
+          <div class="file-import-row">
+            <label class="file-import-label" for="track-geojson-file">
+              📂 Sélectionner un fichier GeoJSON
+              <input type="file" id="track-geojson-file" accept=".geojson,.json" class="file-input-hidden" />
+            </label>
+          </div>
+          <p id="track-import-status" class="settings-hint" style="margin-top:6px"></p>
+          <p class="settings-hint">Format attendu : GeoJSON avec une <code>LineString</code> en WGS-84.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="settings-section">
+    <div class="faq-item">
+      <div class="settings-section-title">🏁 Guide d'utilisation</div>
+      <div class="settings-faq" id="settings-faq">
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Comment démarrer le serveur backend ?</button>
+          <div class="faq-a">Lancez <code>docker-compose up</code> depuis le dossier du projet. Le proxy Node.js démarre sur le port 3001. Vérifiez que les variables dans <code>.env</code> sont correctes (INFLUX, OpenF1…).</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Mode 📡 Direct — comment l'utiliser ?</button>
+          <div class="faq-a">Sélectionnez <strong>📡 DIRECT</strong> dans le menu en haut à droite de la page Live. Le badge passe en vert quand la connexion WebSocket est établie. <strong>⚠ Actuellement indisponible</strong> : la F1 a bloqué les IP des flux temps réel.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Mode 📼 Archive — comment l'utiliser ?</button>
+          <div class="faq-a">La dernière session est chargée depuis le cache local. C'est le <strong>mode par défaut</strong>. Les données de timing, carte et direction de course sont disponibles hors-ligne. Utile pour revoir une session précédente.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Mode 🎮 Simulation — à quoi ça sert ?</button>
+          <div class="faq-a">Des données fictives reproduisent une course complète en temps réel. Idéal pour tester l'interface, faire des démos, ou découvrir les fonctionnalités du dashboard sans session live disponible.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Comment personnaliser la disposition des panneaux ?</button>
+          <div class="faq-a">Activez le <strong>Mode édition</strong> ci-dessus. Vous pouvez ensuite glisser les panneaux par leur bandeau supérieur, redimensionner depuis le coin <code>⤡</code>, et choisir la visibilité de chaque panneau. Sauvegardez via le bouton en bas de page.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Le bouton 📋 dans la nav — à quoi ça sert ?</button>
+          <div class="faq-a">Il s'affiche uniquement sur la page Live pendant un week-end de GP. Il ouvre un panneau flottant avec les horaires de toutes les séances du week-end en cours.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" aria-expanded="false">Pourquoi le mode direct est en pause ?</button>
+          <div class="faq-a">La Formule 1 a mis en place des restrictions d'accès IP sur ses flux de télémétrie en temps réel (OpenF1 API). Le mode direct ne fonctionne plus jusqu'à ce que ces restrictions soient levées ou contournées. Les modes Archive, Simulation et toutes les autres fonctionnalités du site restent disponibles.</div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    </div>
+
+    <div class="settings-modal-footer">
+      <button id="settings-save-btn" class="btn-primary">✓ Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- Overlay détail GP -->
+  <div id="gp-overlay" class="floating-panel" hidden>
+    <div class="fp-header" id="gp-overlay-handle">
+      <span id="fp-title">—</span>
+      <button class="modal-close" id="gp-overlay-close">✕</button>
+    </div>
+    <div class="fp-body" id="gp-overlay-body"></div>
+    <div class="fp-resize" id="gp-overlay-resize">⤡</div>
+  </div>
+
+  <div id="offline-banner" hidden style="display:none!important">Connexion perdue — Reconnexion en cours…</div>
+
+  <script type="module" src="js/app.js"></script>
+
+  <!-- Init bannière de pause live -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const notice = document.getElementById("live-pause-notice");
+      if (!notice) return;
+
+      // Vérifier si déjà dismissée
+      if (localStorage.getItem("f1-live-pause-dismissed") === "1") {
+        notice.style.display = "none";
+      }
+
+      // Dismiss
+      document.getElementById("lpn-dismiss")?.addEventListener("click", () => {
+        notice.style.display = "none";
+        localStorage.setItem("f1-live-pause-dismissed", "1");
+      });
+
+      // Boutons mode
+      notice.querySelectorAll(".lpn-btn[data-mode]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".mode-drop-item[data-mode]").forEach(el => {
+            if (el.dataset.mode === btn.dataset.mode) el.click();
+          });
+          notice.style.display = "none";
+        });
+      });
+    });
+  </script>
+</body>
+</html>
