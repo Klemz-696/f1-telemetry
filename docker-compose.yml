@@ -133,6 +133,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  news_sync:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: f1_news_sync
+    restart: unless-stopped
+    networks:
+      - net_egress
+    volumes:
+      - f1_state:/shared
+    environment:
+      - F1_STATE_DIR=/shared
+    command: python news_sync.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
   api:
     build:
       context: ./backend

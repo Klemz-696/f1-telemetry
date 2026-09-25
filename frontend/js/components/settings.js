@@ -10,6 +10,7 @@ import { loadImportedTrack } from "./tracker_map.js";
 import { applyPreset, PRESET_LAYOUTS } from "./overlay_manager.js";
 import { playSound } from "./sound_engine.js";
 import { makeDraggable, centerPanel } from "./draggable.js";
+import { requestDesktopNotificationPermission } from "./alerts_engine.js";
 
 const modal    = document.getElementById("settings-modal");
 const backdrop = document.getElementById("settings-backdrop");
@@ -136,6 +137,38 @@ function _syncToUI() {
   if (delayInput) delayInput.value = store.delay ?? 0;
   document.querySelectorAll(".btn-choice[data-unit]").forEach(b =>
     b.classList.toggle("active", b.dataset.unit === (store.speedUnit || "kmh")));
+  const towerMode = store.timingTowerMode || "expanded";
+  document.querySelectorAll("#pref-tower-mode-group .btn-choice").forEach(b =>
+    b.classList.toggle("active", b.dataset.towerMode === towerMode));
+  const pitSlider  = document.getElementById("pref-pit-stop-time");
+  const pitDisplay = document.getElementById("pit-stop-time-display");
+  if (pitSlider)  pitSlider.value        = store.pitCustomStopDuration ?? 2.4;
+  if (pitDisplay) pitDisplay.textContent = `${(store.pitCustomStopDuration ?? 2.4).toFixed(1)}s`;
+
+  // Alertes Stratège (Proposal 5)
+  const alertsCfg = store.alertsConfig || {};
+  const triggers = alertsCfg.triggers || {};
+  const elAlertsEn = document.getElementById("pref-alerts-enabled");
+  if (elAlertsEn) elAlertsEn.checked = alertsCfg.enabled !== false;
+  const elAlertsSnd = document.getElementById("pref-alerts-sound");
+  if (elAlertsSnd) elAlertsSnd.checked = alertsCfg.soundAlerts !== false;
+  const elAlertsFav = document.getElementById("pref-alerts-fav-only");
+  if (elAlertsFav) elAlertsFav.checked = !!alertsCfg.onlyFavoriteDrivers;
+
+  const alertTriggerMap = {
+    "pref-alert-pit": "pitStops",
+    "pref-alert-sc": "safetyCar",
+    "pref-alert-best-lap": "fastestLap",
+    "pref-alert-lead": "leadChange",
+    "pref-alert-positions": "positionChanges",
+    "pref-alert-stewards": "stewardsDecisions",
+    "pref-alert-rain": "rainArrival",
+  };
+  for (const [elId, trigKey] of Object.entries(alertTriggerMap)) {
+    const el = document.getElementById(elId);
+    if (el) el.checked = triggers[trigKey] !== false;
+  }
+
   document.documentElement.dataset.oled = store.oled ? "true" : "false";
   _applyTheme(store.theme || "dark");
   _syncTrackRadios();
@@ -151,11 +184,71 @@ for (const [id, key] of Object.entries(TOGGLES)) {
     if (key === "oled") document.documentElement.dataset.oled = el.checked ? "true" : "false";
   });
 }
+
+// ─── Wiring Alertes Stratège ──────────────────────────────────────────────────
+document.getElementById("pref-alerts-enabled")?.addEventListener("change", (e) => {
+  if (!store.alertsConfig) store.alertsConfig = {};
+  store.alertsConfig.enabled = e.target.checked;
+  savePrefs();
+});
+document.getElementById("pref-alerts-sound")?.addEventListener("change", (e) => {
+  if (!store.alertsConfig) store.alertsConfig = {};
+  store.alertsConfig.soundAlerts = e.target.checked;
+  savePrefs();
+});
+document.getElementById("pref-alerts-fav-only")?.addEventListener("change", (e) => {
+  if (!store.alertsConfig) store.alertsConfig = {};
+  store.alertsConfig.onlyFavoriteDrivers = e.target.checked;
+  savePrefs();
+});
+
+const alertTriggerMap = {
+  "pref-alert-pit": "pitStops",
+  "pref-alert-sc": "safetyCar",
+  "pref-alert-best-lap": "fastestLap",
+  "pref-alert-lead": "leadChange",
+  "pref-alert-positions": "positionChanges",
+  "pref-alert-stewards": "stewardsDecisions",
+  "pref-alert-rain": "rainArrival",
+};
+for (const [elId, trigKey] of Object.entries(alertTriggerMap)) {
+  document.getElementById(elId)?.addEventListener("change", (e) => {
+    if (!store.alertsConfig) store.alertsConfig = { triggers: {} };
+    if (!store.alertsConfig.triggers) store.alertsConfig.triggers = {};
+    store.alertsConfig.triggers[trigKey] = e.target.checked;
+    savePrefs();
+  });
+}
+
+const desktopBtn = document.getElementById("pref-alerts-desktop-btn");
+if (desktopBtn) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    desktopBtn.textContent = "✓ Notifications bureau actives";
+    desktopBtn.classList.add("active");
+  }
+  desktopBtn.addEventListener("click", async () => {
+    const granted = await requestDesktopNotificationPermission();
+    if (granted) {
+      desktopBtn.textContent = "✓ Notifications bureau actives";
+      desktopBtn.classList.add("active");
+      if (!store.alertsConfig) store.alertsConfig = {};
+      store.alertsConfig.desktopNotifications = true;
+      savePrefs();
+    }
+  });
+}
 const volSlider  = document.getElementById("pref-rc-volume");
 const volDisplay = document.getElementById("rc-vol-display");
 volSlider?.addEventListener("input", () => {
   if (volDisplay) volDisplay.textContent = volSlider.value;
   updateStore({ rcVolume: Number(volSlider.value) });
+});
+const pitSlider  = document.getElementById("pref-pit-stop-time");
+const pitDisplay = document.getElementById("pit-stop-time-display");
+pitSlider?.addEventListener("input", () => {
+  const val = Number(pitSlider.value);
+  if (pitDisplay) pitDisplay.textContent = `${val.toFixed(1)}s`;
+  updateStore({ pitCustomStopDuration: val });
 });
 document.querySelectorAll(".btn-choice[data-unit]").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -163,6 +256,15 @@ document.querySelectorAll(".btn-choice[data-unit]").forEach(btn => {
     document.querySelectorAll(".btn-choice[data-unit]").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     updateStore({ speedUnit: btn.dataset.unit });
+  });
+});
+document.querySelectorAll("#pref-tower-mode-group .btn-choice").forEach(btn => {
+  btn.addEventListener("click", () => {
+    playSound("click");
+    const mode = btn.dataset.towerMode || "expanded";
+    document.querySelectorAll("#pref-tower-mode-group .btn-choice").forEach(b => b.classList.toggle("active", b.dataset.towerMode === mode));
+    updateStore({ timingTowerMode: mode });
+    savePrefs();
   });
 });
 const delayInput = document.getElementById("pref-delay");

@@ -39,6 +39,8 @@ function resolveTeamColor(teamName) {
 }
 
 import { onUpdate, store } from "../store.js";
+import { evaluateTyreHealth, COMPOUND_COLORS } from "./tyre_model.js";
+import { playMessage } from "./radio_player.js";
 
 let panelDrivers = null;
 let panelTeams   = null;
@@ -416,30 +418,195 @@ function isoToFlagStd(c) {
   return [...c.toUpperCase()].map(x => String.fromCodePoint(x.charCodeAt(0) + 127397)).join("");
 }
 
-function openDriverDetail(driver) {
+export function openDriverDetail(driver) {
   const ol = getOrCreateDetailOverlay();
   const color = resolveTeamColor(driver.team);
   document.getElementById("std-detail-title").innerHTML =
     `<span style="color:${color}">${driver.flag || ""} ${driver.name}</span>`;
   const body = document.getElementById("std-detail-body");
+
+  // Lookup enriched driver metadata
+  let dMeta = null;
+  if (store.drivers_meta) {
+    if (Array.isArray(store.drivers_meta)) {
+      dMeta = store.drivers_meta.find(x => x.acronym === driver.acronym || x.name === driver.name);
+    } else if (typeof store.drivers_meta === "object") {
+      dMeta = store.drivers_meta[driver.acronym] || Object.values(store.drivers_meta).find(x => x.acronym === driver.acronym || x.name === driver.name);
+    }
+  }
+  if (!dMeta && store.drivers) {
+    dMeta = Object.values(store.drivers).find(x => x.acronym === driver.acronym);
+  }
+
+  // Lookup live telemetry driver for real-time tyre degradation
+  const liveDriver = (store.standings || []).find(x =>
+    (driver.acronym && x.acronym === driver.acronym) ||
+    (driver.driver_number && String(x.driver_number) === String(driver.driver_number)) ||
+    (dMeta?.number && String(x.driver_number) === String(dMeta.number)) ||
+    (driver.name && x.driver_name && x.driver_name.toLowerCase().includes(driver.name.toLowerCase()))
+  ) || (driver.compound ? driver : null);
+
+  let tyreHtml = "";
+  if (liveDriver && (liveDriver.compound || liveDriver.tyre_age !== undefined)) {
+    const tyreEval = evaluateTyreHealth(
+      liveDriver,
+      store.circuit_specs?.[store.session?.circuit_name],
+      store.weather
+    );
+    const initial = (tyreEval.compound || "M")[0];
+    const cliffAlertHtml = tyreEval.isCliffApproaching
+      ? `<div class="stdd-tyre-alert">
+           <span class="stdd-tyre-alert-icon">⚠️</span>
+           <span class="stdd-tyre-alert-text"><strong>Alerte Dégradation Critique (Cliff)</strong> : Risque d'effondrement de l'adhérence (${tyreEval.lapsBeforeCliff > 0 ? `dans ~${tyreEval.lapsBeforeCliff} tours` : 'Seuil atteint'}) !</span>
+         </div>`
+      : "";
+
+    tyreHtml = `
+      <div class="stdd-section stdd-tyre-section">
+        <div class="stdd-section-title">🛞 Gestion des Pneumatiques (Pirelli Tyre Model)</div>
+        ${cliffAlertHtml}
+        <div class="stdd-tyre-card">
+          <div class="stdd-tyre-gauge-col">
+            <div class="stdd-tyre-gauge-wrap">
+              <svg class="stdd-tyre-svg" viewBox="0 0 36 36">
+                <path class="tyre-ring-bg"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path class="tyre-ring-val ${tyreEval.isCliffApproaching ? 'tyre-cliff-pulse' : ''}"
+                  stroke="${tyreEval.statusColor}"
+                  stroke-dasharray="${tyreEval.healthPercent}, 100"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <div class="stdd-tyre-gauge-inner">
+                <span class="stdd-tyre-letter" style="color:${tyreEval.compoundColor}">${initial}</span>
+                <span class="stdd-tyre-pct">${tyreEval.healthPercent}%</span>
+              </div>
+            </div>
+            <span class="stdd-tyre-status-badge" style="color:${tyreEval.statusColor}; border-color:${tyreEval.statusColor}55; background:${tyreEval.statusColor}18">
+              ${tyreEval.statusLabel}
+            </span>
+          </div>
+
+          <div class="stdd-tyre-stats-grid">
+            <div class="stdd-tyre-metric">
+              <span class="stdd-tyre-metric-lbl">Composé de Gomme</span>
+              <span class="stdd-tyre-metric-val" style="color:${tyreEval.compoundColor}">Pirelli ${tyreEval.compound}</span>
+            </div>
+            <div class="stdd-tyre-metric">
+              <span class="stdd-tyre-metric-lbl">Âge du Train</span>
+              <span class="stdd-tyre-metric-val">${tyreEval.age} tour${tyreEval.age > 1 ? "s" : ""}</span>
+            </div>
+            <div class="stdd-tyre-metric">
+              <span class="stdd-tyre-metric-lbl">Perte Chrono Estimée</span>
+              <span class="stdd-tyre-metric-val">+${tyreEval.paceLossSec} s / tour</span>
+            </div>
+            <div class="stdd-tyre-metric">
+              <span class="stdd-tyre-metric-lbl">Longévité Optimale</span>
+              <span class="stdd-tyre-metric-val">${tyreEval.effectiveLife} tours max</span>
+            </div>
+            <div class="stdd-tyre-metric">
+              <span class="stdd-tyre-metric-lbl">Seuil de Falaise (Cliff)</span>
+              <span class="stdd-tyre-metric-val">Tour ~${tyreEval.cliffLapEstimated} (${tyreEval.lapsBeforeCliff > 0 ? `dans ${tyreEval.lapsBeforeCliff}T` : 'Atteint'})</span>
+            </div>
+            <div class="stdd-tyre-metric">
+              <span class="stdd-tyre-metric-lbl">Température Asphalte</span>
+              <span class="stdd-tyre-metric-val">${Math.round(store.weather?.track_temp ?? store.weather?.track_temperature ?? 35)}°C</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Lookup latest team radio communication for this driver
+  const driverRadio = (store.team_radios || []).find(r =>
+    String(r.driver_number) === String(driver.driver_number || dMeta?.number) ||
+    r.driver_acronym === driver.acronym
+  );
+
+  let radioHtml = "";
+  if (driverRadio) {
+    radioHtml = `
+      <div class="stdd-section stdd-radio-section">
+        <div class="stdd-section-title">🎙️ Dernière Communication Radio</div>
+        <div class="stdd-radio-card" id="stdd-driver-radio-btn" style="border-left: 4px solid ${color}; cursor: pointer;" title="Cliquer pour écouter la radio">
+          <div class="stdd-radio-meta">
+            <span class="stdd-radio-cat">${driverRadio.category || "COMMUNICATION"}</span>
+            <span class="stdd-radio-time">${driverRadio.timestamp || "--:--"}</span>
+          </div>
+          <p class="stdd-radio-quote">“${driverRadio.transcript}”</p>
+          <div class="stdd-radio-action">
+            <span class="stdd-radio-play-icon">▶</span>
+            <span>Écouter la radio</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const photoHtml = dMeta?.photo_url
+    ? `<div class="stdd-photo-wrap"><img src="${dMeta.photo_url}" alt="${driver.name}" class="stdd-driver-img" onerror="this.parentElement.style.display='none'" /></div>`
+    : `<div class="stdd-photo-wrap stdd-photo-fallback"><span class="stdd-photo-num">#${dMeta?.number || driver.driver_number || driver.position}</span></div>`;
+
   body.innerHTML = `
     <div class="stdd-hero" style="border-left: 4px solid ${color}">
-      <span class="stdd-hero-num">#${driver.position}</span>
-      <span class="stdd-hero-code">${driver.acronym || ""}</span>
-      <span class="stdd-hero-fullname">${driver.name}</span>
-      <span class="stdd-hero-team" style="color:${color}">${driver.team}</span>
+      ${photoHtml}
+      <div class="stdd-hero-info">
+        <div class="stdd-hero-topline">
+          <span class="stdd-hero-num">#${dMeta?.number || driver.driver_number || driver.position}</span>
+          <span class="stdd-hero-code">${driver.acronym || ""}</span>
+          <span class="stdd-hero-flag">${driver.flag || dMeta?.flag || ""}</span>
+          <span class="stdd-hero-nat">${dMeta?.nationality || ""}</span>
+        </div>
+        <h2 class="stdd-hero-fullname">${dMeta?.full_name || driver.name}</h2>
+        <span class="stdd-hero-team" style="color:${color}">${driver.team}</span>
+        ${dMeta?.birth_date ? `<span class="stdd-hero-birth">Né le ${new Date(dMeta.birth_date).toLocaleDateString("fr-FR", {day:"numeric",month:"long",year:"numeric"})}</span>` : ""}
+      </div>
     </div>
+
+    <!-- Palmarès en carrière F1 -->
+    <div class="stdd-palmares">
+      <div class="stdd-section-subtitle">🏆 Palmarès en Formule 1</div>
+      <div class="stdd-palmares-grid">
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${dMeta?.championships ?? 0}</span><span class="stdd-palmares-lbl">Titres Mondiaux</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${dMeta?.career_wins ?? 0}</span><span class="stdd-palmares-lbl">Victoires F1</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${dMeta?.career_podiums ?? 0}</span><span class="stdd-palmares-lbl">Podiums</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${dMeta?.career_poles ?? 0}</span><span class="stdd-palmares-lbl">Pole Positions</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${dMeta?.career_points ?? 0}</span><span class="stdd-palmares-lbl">Pts Carrière</span></div>
+      </div>
+    </div>
+
+    ${dMeta?.biography ? `
+    <div class="stdd-section">
+      <div class="stdd-section-title">📖 Biographie & Parcours</div>
+      <p class="stdd-bio-text">${dMeta.biography}</p>
+    </div>` : ""}
+
+    <!-- Stats Saison 2026 -->
     <div class="stdd-stats-row">
-      <div class="stdd-stat"><span class="stdd-stat-val">${driver.points}</span><span class="stdd-stat-lbl">Points</span></div>
-      <div class="stdd-stat"><span class="stdd-stat-val">${driver.position}</span><span class="stdd-stat-lbl">Classement</span></div>
-      <div class="stdd-stat" id="stdd-wins"><span class="stdd-stat-val">—</span><span class="stdd-stat-lbl">Victoires</span></div>
-      <div class="stdd-stat" id="stdd-podiums"><span class="stdd-stat-val">—</span><span class="stdd-stat-lbl">Podiums</span></div>
+      <div class="stdd-stat"><span class="stdd-stat-val">${driver.points}</span><span class="stdd-stat-lbl">Points 2026</span></div>
+      <div class="stdd-stat"><span class="stdd-stat-val">P${driver.position}</span><span class="stdd-stat-lbl">Rang 2026</span></div>
+      <div class="stdd-stat" id="stdd-wins"><span class="stdd-stat-val">—</span><span class="stdd-stat-lbl">Victoires 2026</span></div>
+      <div class="stdd-stat" id="stdd-podiums"><span class="stdd-stat-val">—</span><span class="stdd-stat-lbl">Podiums 2026</span></div>
     </div>
+
+    ${tyreHtml}
+
+    ${radioHtml}
+
     <div class="stdd-section">
       <div class="stdd-section-title">Saison 2026 — course par course</div>
       <div class="stdd-history" id="stdd-history"><div class="stdd-empty">Chargement…</div></div>
     </div>`;
   ol.hidden = false;
+
+  if (driverRadio) {
+    const radioBtn = document.getElementById("stdd-driver-radio-btn");
+    if (radioBtn) {
+      radioBtn.addEventListener("click", () => playMessage(driverRadio));
+    }
+  }
 
   // Lookup driverRef from store
   const driverEntry = Object.values(store.drivers || {}).find(d =>
@@ -461,7 +628,6 @@ function openDriverDetail(driver) {
       if (pos === 1) wins++;
       if (pos <= 3) podiums++;
       const cls = pos === 1 ? "p1" : pos === 2 ? "p2" : pos === 3 ? "p3" : "";
-      const time = res.Time?.time || res.status || "—";
       return `<div class="stdd-hist-row ${cls}">
         <span class="shist-round">R${r.round}</span>
         <span class="shist-gp">${r.raceName}</span>
@@ -483,17 +649,60 @@ function openTeamDetail(team) {
   document.getElementById("std-detail-title").innerHTML =
     `<span style="color:${color}">${team.name}</span>`;
   const body = document.getElementById("std-detail-body");
+
+  // Lookup team meta
+  let tMeta = null;
+  if (store.teams_meta) {
+    if (typeof store.teams_meta === "object" && !Array.isArray(store.teams_meta)) {
+      tMeta = store.teams_meta[team.name] || Object.values(store.teams_meta).find(t =>
+        (t.full_name && t.full_name.toLowerCase().includes(team.name.toLowerCase())) ||
+        team.name.toLowerCase().includes((t.name || "").toLowerCase())
+      );
+    } else if (Array.isArray(store.teams_meta)) {
+      tMeta = store.teams_meta.find(t =>
+        (t.full_name && t.full_name.toLowerCase().includes(team.name.toLowerCase())) ||
+        team.name.toLowerCase().includes((t.name || "").toLowerCase())
+      );
+    }
+  }
+
+  const logoHtml = tMeta?.logo_url ? `<img src="${tMeta.logo_url}" alt="${team.name}" class="stdd-team-logo" />` : "";
+  const liveryHtml = tMeta?.car_image_url ? `<div class="stdd-team-livery"><img src="${tMeta.car_image_url}" alt="Monoplace ${team.name}" /></div>` : "";
+
   body.innerHTML = `
-    <div class="stdd-hero" style="border-left: 4px solid ${color}">
-      <span class="stdd-hero-num">#${team.position}</span>
-      <span class="stdd-hero-fullname" style="color:${color}">${team.name}</span>
+    <div class="stdd-hero stdd-hero-team-view" style="border-left: 4px solid ${color}">
+      ${logoHtml ? `<div class="stdd-team-logo-wrap">${logoHtml}</div>` : ""}
+      <div class="stdd-hero-info">
+        <div class="stdd-hero-topline">
+          <span class="stdd-hero-num">#${team.position}</span>
+          <span class="stdd-hero-code">${tMeta?.base ? `📍 ${tMeta.base}` : ""}</span>
+        </div>
+        <h2 class="stdd-hero-fullname" style="color:${color}">${tMeta?.full_name || team.name}</h2>
+        <div class="stdd-team-tech-specs">
+          ${tMeta?.team_principal ? `<span><strong>Dirigeant :</strong> ${tMeta.team_principal}</span>` : ""}
+          ${tMeta?.power_unit ? `<span><strong>Moteur :</strong> ${tMeta.power_unit}</span>` : ""}
+        </div>
+      </div>
     </div>
-    <div class="stdd-stats-row">
-      <div class="stdd-stat"><span class="stdd-stat-val">${team.points}</span><span class="stdd-stat-lbl">Points</span></div>
-      <div class="stdd-stat"><span class="stdd-stat-val">${team.position}</span><span class="stdd-stat-lbl">Classement</span></div>
-      <div class="stdd-stat" id="stdd-team-wins"><span class="stdd-stat-val">—</span><span class="stdd-stat-lbl">Victoires</span></div>
-      <div class="stdd-stat" id="stdd-team-podiums"><span class="stdd-stat-val">—</span><span class="stdd-stat-lbl">Podiums</span></div>
+
+    ${liveryHtml}
+
+    <div class="stdd-palmares">
+      <div class="stdd-section-subtitle">🏆 Palmarès Écurie</div>
+      <div class="stdd-palmares-grid">
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${tMeta?.championships ?? 0}</span><span class="stdd-palmares-lbl">Titres Constructeurs</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${tMeta?.wins ?? 0}</span><span class="stdd-palmares-lbl">Victoires F1</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${tMeta?.podiums ?? 0}</span><span class="stdd-palmares-lbl">Podiums</span></div>
+        <div class="stdd-palmares-card"><span class="stdd-palmares-val">${team.points}</span><span class="stdd-palmares-lbl">Pts 2026</span></div>
+      </div>
     </div>
+
+    ${tMeta?.history ? `
+    <div class="stdd-section">
+      <div class="stdd-section-title">🏛️ Histoire de l'écurie</div>
+      <p class="stdd-bio-text">${tMeta.history}</p>
+    </div>` : ""}
+
     <div class="stdd-section">
       <div class="stdd-section-title">Pilotes de l'équipe</div>
       <div id="stdd-team-drivers"></div>

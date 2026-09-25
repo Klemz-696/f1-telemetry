@@ -11,29 +11,51 @@ import { store, updateStore, savePrefs } from "../store.js";
 
 export const PRESET_LAYOUTS = {
   broadcast: {
-    "ov-timing":     { x: 0,  y: 0, w: 29, h: 100, visible: true, z: 11 },
-    "ov-map":        { x: 29, y: 0, w: 48, h: 100, visible: true, z: 10 },
-    "ov-rc":         { x: 77, y: 0, w: 23, h: 100, visible: true, z: 12 },
+    "ov-timing":     { x: 0,  y: 0, w: 29, h: 100, visible: true,  z: 11 },
+    "ov-map":        { x: 29, y: 0, w: 48, h: 100, visible: true,  z: 10 },
+    "ov-rc":         { x: 77, y: 0, w: 23, h: 100, visible: true,  z: 12 },
     "ov-commentary": { x: 77, y: 55, w: 23, h: 45, visible: false, z: 13 },
+    "ov-compare":    { x: 29, y: 55, w: 48, h: 45, visible: false, z: 14 },
+    "ov-radio":      { x: 77, y: 55, w: 23, h: 45, visible: false, z: 15 },
   },
   "focus-map": {
-    "ov-timing":     { x: 0,  y: 62, w: 26, h: 38, visible: true, z: 12 },
+    "ov-timing":     { x: 0,  y: 62, w: 26, h: 38, visible: true,  z: 12 },
     "ov-map":        { x: 0,  y: 0,  w: 100, h: 100, visible: true, z: 10 },
-    "ov-rc":         { x: 74, y: 62, w: 26, h: 38, visible: true, z: 11 },
+    "ov-rc":         { x: 74, y: 62, w: 26, h: 38, visible: true,  z: 11 },
     "ov-commentary": { x: 74, y: 0,  w: 26, h: 38, visible: false, z: 13 },
+    "ov-compare":    { x: 0,  y: 62, w: 74, h: 38, visible: false, z: 14 },
+    "ov-radio":      { x: 74, y: 0,  w: 26, h: 38, visible: false, z: 15 },
+  },
+  compare: {
+    "ov-timing":     { x: 0,  y: 0,  w: 24, h: 100, visible: true,  z: 11 },
+    "ov-map":        { x: 24, y: 0,  w: 42, h: 54,  visible: true,  z: 10 },
+    "ov-rc":         { x: 66, y: 0,  w: 34, h: 54,  visible: true,  z: 12 },
+    "ov-commentary": { x: 66, y: 0,  w: 34, h: 54,  visible: false, z: 13 },
+    "ov-compare":    { x: 24, y: 54, w: 76, h: 46,  visible: true,  z: 15 },
+    "ov-radio":      { x: 66, y: 0,  w: 34, h: 54,  visible: false, z: 16 },
+  },
+  radios: {
+    "ov-timing":     { x: 0,  y: 0,  w: 26, h: 100, visible: true,  z: 11 },
+    "ov-map":        { x: 26, y: 0,  w: 42, h: 100, visible: true,  z: 10 },
+    "ov-rc":         { x: 68, y: 0,  w: 32, h: 48,  visible: true,  z: 12 },
+    "ov-commentary": { x: 68, y: 0,  w: 32, h: 48,  visible: false, z: 13 },
+    "ov-compare":    { x: 26, y: 55, w: 42, h: 45, visible: false, z: 14 },
+    "ov-radio":      { x: 68, y: 48, w: 32, h: 52, visible: true,  z: 16 },
   },
   minimal: {
-    "ov-timing":     { x: 0,  y: 0, w: 36, h: 100, visible: true, z: 11 },
-    "ov-map":        { x: 36, y: 0, w: 64, h: 100, visible: true, z: 10 },
+    "ov-timing":     { x: 0,  y: 0, w: 36, h: 100, visible: true,  z: 11 },
+    "ov-map":        { x: 36, y: 0, w: 64, h: 100, visible: true,  z: 10 },
     "ov-rc":         { x: 80, y: 0, w: 20, h: 0,   visible: false, z: 12 },
     "ov-commentary": { x: 80, y: 0, w: 20, h: 0,   visible: false, z: 13 },
+    "ov-compare":    { x: 36, y: 55, w: 64, h: 45, visible: false, z: 14 },
+    "ov-radio":      { x: 80, y: 0, w: 20, h: 0,   visible: false, z: 15 },
   },
 };
 
-const OVERLAY_IDS = ["ov-timing", "ov-map", "ov-rc", "ov-commentary"];
+const OVERLAY_IDS = ["ov-timing", "ov-map", "ov-rc", "ov-commentary", "ov-compare", "ov-radio"];
 
 // Font sizes par overlay (en px), stockées dans le store
-const DEFAULT_FONT_SIZE = { "ov-timing": 12, "ov-map": 12, "ov-rc": 12, "ov-commentary": 12 };
+const DEFAULT_FONT_SIZE = { "ov-timing": 12, "ov-map": 12, "ov-rc": 12, "ov-commentary": 12, "ov-compare": 12, "ov-radio": 12 };
 const MIN_FONT = 8;
 const MAX_FONT = 22;
 

@@ -3,7 +3,7 @@
  * Nouvelles vues : #home (accueil) et #results (résultats de saison)
  */
 
-export const KNOWN_HASHES = ["#home", "#telemetry", "#results", "#calendar", "#standings"];
+export const KNOWN_HASHES = ["#home", "#telemetry", "#results", "#calendar", "#standings", "#news"];
 
 let _playSound = () => {};
 export function setNavSoundPlayer(fn) { _playSound = fn; }

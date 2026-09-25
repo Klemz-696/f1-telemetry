@@ -118,49 +118,122 @@ async def is_live(session: aiohttp.ClientSession) -> bool:
         return False
 
 
-# ─── MODE ARCHIVE ─────────────────────────────────────────────────────────────
+# ─── MODE ARCHIVE & POLLING OPTIMISÉ ──────────────────────────────────────────
 
-ARCHIVE_TOPICS = [
-    "CarData.z", "Position.z", "TimingData", "TimingAppData",
+FAST_TOPICS = [
+    "TimingData", "TimingAppData", "CarData.z", "Position.z",
+]
+
+SLOW_TOPICS = [
     "SessionInfo", "SessionStatus", "WeatherData",
     "RaceControlMessages", "TrackStatus", "LapCount", "ExtrapolatedClock",
 ]
 
-async def poll_archive(session: aiohttp.ClientSession, path: str) -> None:
+ARCHIVE_TOPICS = FAST_TOPICS + SLOW_TOPICS
+
+
+async def update_ingestion_status(
+    mode: str,
+    status_label: str,
+    latency_ms: int = 0,
+    transport: str = "http_polling",
+    active_session: str = "",
+) -> None:
+    """Publie l'état d'ingestion pour le backend FastAPI et le frontend."""
+    tok = (F1_AUTH_TOKEN or "").strip()
+    status = {
+        "mode": mode,
+        "has_token": bool(tok),
+        "status_label": status_label,
+        "latency_ms": max(0, int(latency_ms)),
+        "last_sync": time.time(),
+        "transport": transport,
+        "active_session": active_session,
+    }
+    await write_state_file("IngestionStatus", status)
+
+
+async def fetch_single_topic(session: aiohttp.ClientSession, base: str, topic: str) -> None:
+    """Récupère un topic de manière isolée avec gestion 429 / 502."""
+    url = f"{base}{topic}.json?rnd={int(time.time()*1000)}"
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=4, connect=2)) as r:
+            if r.status == 429:
+                retry_after = int(r.headers.get("Retry-After", 10) or 10)
+                logger.warning("F1 Static API 429 (Rate Limit) sur %s — temporisation %ds", topic, retry_after)
+                await asyncio.sleep(min(retry_after, 30))
+                return
+            if r.status in (502, 503, 504):
+                logger.warning("F1 Static API %d temporaire sur %s", r.status, topic)
+                return
+            if r.status != 200:
+                return
+
+            text = await r.text(encoding="utf-8-sig")
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                return
+
+            await dispatch_static(topic, payload)
+
+    except asyncio.TimeoutError:
+        logger.debug("Timeout (4s) sur le topic %s", topic)
+    except Exception as e:
+        logger.debug("Erreur fetch archive %s : %s", topic, e)
+
+
+async def poll_archive(session: aiohttp.ClientSession, path: str, is_session_live: bool = False) -> None:
     """
-    Poll les fichiers JSON statiques toutes les 2 secondes.
-    Utilisé hors session live. Aucun token requis.
-    encoding="utf-8-sig" : supprime le BOM UTF-8 systématiquement présent
-    dans les fichiers statiques de l'infrastructure F1.
+    Poll concurrent optimisé :
+      - Topics haute fréquence (Timing, Positions, CarData) à cadence rapide (~1s)
+      - Topics basse fréquence (Météo, Race Control, SessionInfo) toutes les ~4 secondes
+      - Requêtes concurrentes via asyncio.gather pour éliminer la latence cumulée
+      - Gestion fine des codes 429 et 502
     """
-    logger.info("Mode ARCHIVE activé — path : %s", path)
+    mode = "live_polling" if is_session_live else "archive"
+    label = "En direct (Délai API OpenF1)" if is_session_live else "Mode Archive (Session passée)"
+    logger.info("Mode %s activé — path : %s", mode.upper(), path)
+
     base = f"{F1_STATIC_BASE}/{path}"
+    tick_counter = 0
 
     while True:
-        # Revérifier si le live démarre (sauf si chemin forcé)
+        # Revérifier si le live officiel démarre (sauf si chemin forcé)
         if not FORCED_SESSION_PATH and await is_live(session):
-            logger.info("Session live détectée — basculement mode LIVE")
+            logger.info("Session live officielle détectée — basculement mode LIVE SignalR")
             return
 
-        for topic in ARCHIVE_TOPICS:
-            url = f"{base}{topic}.json?rnd={int(time.time()*1000)}"
-            try:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
-                    if r.status != 200:
-                        continue
-                    # encoding="utf-8-sig" : BOM UTF-8 de l'API F1
-                    text = await r.text(encoding="utf-8-sig")
-                    try:
-                        payload = json.loads(text)
-                    except json.JSONDecodeError:
-                        continue
+        t0 = time.time()
+        tick_counter += 1
 
-                    await dispatch_static(topic, payload)
+        # 1. Topics rapides exécutés en parallèle
+        fast_tasks = [fetch_single_topic(session, base, topic) for topic in FAST_TOPICS]
 
-            except Exception as e:
-                logger.debug("Erreur fetch archive %s : %s", topic, e)
+        # 2. Topics lents toutes les 4 itérations (~3.5-4s)
+        slow_tasks = []
+        if tick_counter % 4 == 1:
+            slow_tasks = [fetch_single_topic(session, base, topic) for topic in SLOW_TOPICS]
 
-        await asyncio.sleep(2)
+        # Exécution concurrente
+        await asyncio.gather(*fast_tasks, *slow_tasks, return_exceptions=True)
+
+        latency_ms = int((time.time() - t0) * 1000)
+
+        # Mettre à jour l'état d'ingestion toutes les 2 itérations
+        if tick_counter % 2 == 0:
+            await update_ingestion_status(
+                mode=mode,
+                status_label=label,
+                latency_ms=latency_ms,
+                transport="http_polling",
+                active_session=path,
+            )
+
+        # Attente adaptative : cible ~900ms entre ticks pour une fluidité maximale
+        elapsed = time.time() - t0
+        sleep_time = max(0.2, 0.9 - elapsed)
+        await asyncio.sleep(sleep_time)
 
 
 async def dispatch_static(topic: str, payload) -> None:
@@ -292,6 +365,13 @@ async def run_live(session: aiohttp.ClientSession) -> bool:
     ws_url = f"{WS_BASE_URL}?id={token}"
     async with session.ws_connect(ws_url, headers=headers, heartbeat=30, max_msg_size=0) as ws:
         logger.info("WebSocket SignalR connectée")
+        await update_ingestion_status(
+            mode="live_signalr",
+            status_label="En direct officiel (Token actif)",
+            latency_ms=15,
+            transport="websocket",
+            active_session="live_signalr",
+        )
         await ws.send_str(HANDSHAKE_MSG)
         await ws.receive_str()
         await ws.send_str(SUBSCRIBE_MSG)
@@ -319,14 +399,21 @@ async def run() -> None:
                 if live and not FORCED_SESSION_PATH:
                     signalr_success = await run_live(session)
                 
-                # Si non-live, ou chemin forcé, ou erreur SignalR (pas de token) -> fallback Polling
+                # Si non-live, ou chemin forcé, ou erreur SignalR (pas de token) -> fallback Polling optimisé
                 if not signalr_success:
                     path = await get_session_path(session)
                     if path:
-                        logger.info("Basculement sur le polling de %s", path)
-                        await poll_archive(session, path)
+                        logger.info("Basculement sur le polling concurrent de %s (live=%s)", path, live)
+                        await poll_archive(session, path, is_session_live=live)
                     else:
                         logger.info("Aucune session disponible — attente 30s")
+                        await update_ingestion_status(
+                            mode="standby",
+                            status_label="En attente de session",
+                            latency_ms=0,
+                            transport="http_polling",
+                            active_session="",
+                        )
                         await asyncio.sleep(30)
                 backoff = 1
             except Exception as e:

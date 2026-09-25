@@ -23,9 +23,14 @@
       <a href="#results"    class="nav-link" id="nav-results"><span class="nav-icon">🏁</span> RÉSULTATS</a>
       <a href="#calendar"   class="nav-link" id="nav-calendar"><span class="nav-icon">📅</span> CALENDRIER</a>
       <a href="#standings"  class="nav-link" id="nav-standings"><span class="nav-icon">🏆</span> CLASSEMENTS</a>
+      <a href="#news"       class="nav-link" id="nav-news"><span class="nav-icon">📰</span> ACTUALITÉS</a>
       <a href="#telemetry"  class="nav-link" id="nav-live"><span class="nav-icon">📡</span> LIVE</a>
     </div>
     <div class="nav-controls">
+      <div id="live-status-pill" class="live-status-pill" title="Statut de la télémétrie en direct">
+        <span class="live-status-dot"></span>
+        <span id="live-status-label" class="live-status-label">Initialisation</span>
+      </div>
       <button id="mode-toggle-btn" class="mode-toggle-btn" title="Changer de mode">🔄 AUTO ▾</button>
       <div id="mode-dropdown" class="mode-dropdown" hidden>
         <button class="mode-drop-item" data-mode="auto">🔄 Auto <span class="mode-drop-hint">Détection automatique</span></button>
@@ -46,6 +51,7 @@
       <a href="#results"    class="nav-link drawer-link" id="drawer-results"><span class="nav-icon">🏁</span> RÉSULTATS</a>
       <a href="#calendar"   class="nav-link drawer-link" id="drawer-calendar"><span class="nav-icon">📅</span> CALENDRIER</a>
       <a href="#standings"  class="nav-link drawer-link" id="drawer-standings"><span class="nav-icon">🏆</span> CLASSEMENTS</a>
+      <a href="#news"       class="nav-link drawer-link" id="drawer-news"><span class="nav-icon">📰</span> ACTUALITÉS</a>
       <a href="#telemetry"  class="nav-link drawer-link" id="drawer-live"><span class="nav-icon">📡</span> LIVE</a>
     </div>
     <div class="drawer-footer">
@@ -60,6 +66,9 @@
     </div>
   </div>
   <div id="drawer-backdrop"></div>
+
+  <!-- Conteneur d'alertes flottantes (Toasts) -->
+  <div id="alerts-toast-container" class="alerts-toast-container" aria-live="polite"></div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <!-- Vue Accueil                                                            -->
@@ -103,6 +112,17 @@
         <a href="#standings" class="home-see-all" id="home-see-teams">Voir tout →</a>
       </div>
     </section>
+
+    <!-- Actualités F1 Récentes -->
+    <section class="home-section home-news-section">
+      <div class="home-section-header">
+        <h3 class="home-section-title">📰 Dernières actualités F1</h3>
+        <a href="#news" class="home-see-all">Toutes les actus →</a>
+      </div>
+      <div id="home-news-container">
+        <div class="home-section-empty">Chargement des actualités…</div>
+      </div>
+    </section>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -133,6 +153,7 @@
       </div>
       <div class="sb-center">
         <span id="sb-track-flag" class="flag-green sb-track-status">● VERT</span>
+        <span id="sb-live-source" class="sb-live-source-pill" title="Source et latence des données">Mode Inconnu</span>
         <span id="sb-laps" class="sb-laps hidden">TOUR <strong id="sb-lap-cur">—</strong>/<strong id="sb-lap-tot">—</strong></span>
         <span id="sb-time-remaining" class="sb-remaining"></span>
       </div>
@@ -153,12 +174,16 @@
       <button class="mob-tab" data-target="ov-map" data-index="1">🗺️ Carte</button>
       <button class="mob-tab" data-target="ov-rc" data-index="2">🏁 Course</button>
       <button class="mob-tab" data-target="ov-commentary" data-index="3">🎙️ Comm.</button>
+      <button class="mob-tab" data-target="ov-compare" data-index="4">⚡ Télémétrie</button>
+      <button class="mob-tab" data-target="ov-radio" data-index="5">📻 Radios</button>
     </div>
     <div id="tab-dots" class="tab-dots">
       <span class="tab-dot active" data-index="0"></span>
       <span class="tab-dot" data-index="1"></span>
       <span class="tab-dot" data-index="2"></span>
       <span class="tab-dot" data-index="3"></span>
+      <span class="tab-dot" data-index="4"></span>
+      <span class="tab-dot" data-index="5"></span>
     </div>
 
     <div id="dashboard">
@@ -229,6 +254,124 @@
         <div class="ov-resize-handle">⤡</div>
       </div>
 
+      <div class="dashboard-overlay" id="ov-compare">
+        <div class="ov-drag-handle">
+          <span class="ov-handle-label">⚡ TÉLÉMÉTRIE COMPARATIVE</span>
+          <div class="compare-selectors">
+            <select id="compare-drv-a" class="select-sm" title="Premier pilote"></select>
+            <span class="compare-vs">VS</span>
+            <select id="compare-drv-b" class="select-sm" title="Second pilote"></select>
+            <select id="compare-lap-mode" class="select-sm">
+              <option value="live">Tour en cours</option>
+              <option value="best">Meilleur tour</option>
+            </select>
+          </div>
+          <button class="ov-btn-font ov-btn-font-down" title="Réduire le texte">A−</button>
+          <button class="ov-btn-font ov-btn-font-up"   title="Agrandir le texte">A+</button>
+          <button class="ov-btn-front" title="Premier plan">▲</button>
+          <button class="ov-btn-back"  title="Arrière plan">▼</button>
+        </div>
+        <div class="ov-content" id="compare-content">
+          <div class="compare-summary-bar">
+            <div id="compare-delta-display" class="compare-delta-badge">Δ --:--</div>
+            <div id="compare-point-info" class="compare-point-info">Chargement…</div>
+          </div>
+          <div class="canvas-container" id="compare-canvas-wrap">
+            <canvas id="canvas-telemetry"></canvas>
+          </div>
+        </div>
+        <div class="ov-resize-handle">⤡</div>
+      </div>
+
+      <!-- Overlay 6 : Radios d'Équipes & Transcriptions -->
+      <div class="dashboard-overlay" id="ov-radio">
+        <div class="ov-drag-handle">
+          <span class="ov-handle-label">📻 RADIOS D'ÉQUIPES</span>
+          <div class="radio-toolbar-actions">
+            <select id="radio-driver-filter" class="select-sm" title="Filtrer par pilote">
+              <option value="all">📻 Tous les pilotes</option>
+            </select>
+          </div>
+          <button class="ov-btn-font ov-btn-font-down" title="Réduire le texte">A−</button>
+          <button class="ov-btn-font ov-btn-font-up"   title="Agrandir le texte">A+</button>
+          <button class="ov-btn-front" title="Premier plan">▲</button>
+          <button class="ov-btn-back"  title="Arrière plan">▼</button>
+        </div>
+        <div class="ov-content" id="radio-content">
+          
+          <!-- Filtres de catégories & Options -->
+          <div class="radio-sub-toolbar">
+            <div class="radio-category-pills">
+              <button class="radio-cat-pill active" data-cat="ALL">Tous</button>
+              <button class="radio-cat-pill" data-cat="STRATEGY">📋 Stratégie</button>
+              <button class="radio-cat-pill" data-cat="TIRE">🛞 Pneus</button>
+              <button class="radio-cat-pill" data-cat="TECHNICAL">⚙️ Technique</button>
+              <button class="radio-cat-pill" data-cat="INCIDENT">⚠️ Incidents</button>
+            </div>
+            <label class="toggle-row-inline" title="Lecture audio automatique des communications de vos pilotes épinglés">
+              <input type="checkbox" id="radio-autoplay-fav" />
+              <span class="toggle-track"></span>
+              <span class="toggle-lbl">Auto-play</span>
+            </label>
+          </div>
+
+          <!-- Lecteur en cours d'écoute Broadcast -->
+          <div class="radio-current-player" id="radio-current-player">
+            <div class="radio-player-meta">
+              <div class="radio-driver-tag" id="now-playing-driver">
+                <span class="np-color-bar" style="background:#e10600"></span>
+                <span class="np-acronym">F1</span>
+                <span class="np-num">LIVE</span>
+                <span class="np-team">Sélectionnez une radio</span>
+              </div>
+              <div class="radio-meta-badges">
+                <span class="radio-cat-badge" id="now-playing-cat">COMMUNICATION</span>
+                <span class="radio-time-tag" id="now-playing-time">--:--:--</span>
+              </div>
+            </div>
+
+            <div class="radio-transcript-box" id="now-playing-text">
+              Cliquez sur une communication ci-dessous pour écouter le flux audio et lire la transcription.
+            </div>
+
+            <div class="radio-player-controls">
+              <button id="radio-master-play-btn" class="radio-btn-play-master" title="Écouter">▶</button>
+              <div class="radio-waveform" id="radio-waveform">
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+                <span class="waveform-bar"></span>
+              </div>
+              <div class="radio-progress-wrap">
+                <div class="radio-progress-bar">
+                  <div class="radio-progress-fill" id="radio-progress-fill"></div>
+                </div>
+                <div class="radio-time-labels">
+                  <span id="radio-time-current">0:00</span>
+                  <span id="radio-time-total">0:00</span>
+                </div>
+              </div>
+              <div class="radio-volume-wrap">
+                <span class="radio-vol-icon">🔊</span>
+                <input type="range" id="radio-volume-slider" min="0" max="1" step="0.05" value="0.8" title="Volume radio" />
+              </div>
+            </div>
+            <audio id="html5-radio-audio" preload="none"></audio>
+          </div>
+
+          <!-- Flux chronologique des radios -->
+          <div class="radio-messages-feed" id="radio-messages-feed">
+            <div class="radio-feed-loading">Chargement des radios d'équipes…</div>
+          </div>
+
+        </div>
+        <div class="ov-resize-handle">⤡</div>
+      </div>
+
     </div>
   </div>
 
@@ -288,6 +431,42 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Vue Actualités F1                                                      -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="view-news" class="view">
+    <div class="view-header news-header">
+      <div class="news-header-info">
+        <h2>📰 Dépêches & Actualités F1</h2>
+        <p class="news-subtitle">Flux en continu de la presse spécialisée (F1i, F1 Box-Box, Motorsport FR) · Saison 2026</p>
+      </div>
+      <div class="news-header-actions">
+        <span id="news-status-msg" class="news-status-msg">Synchronisation en cours…</span>
+        <button id="news-refresh-btn" class="btn-sm btn-icon" title="Rafraîchir les flux">🔄 Actualiser</button>
+      </div>
+    </div>
+
+    <div class="news-toolbar">
+      <div class="news-filter-categories" id="news-category-filters">
+        <button class="news-filter-btn active" data-category="all">⚡ Tout</button>
+        <button class="news-filter-btn" data-category="Grand Prix">🏁 Grand Prix</button>
+        <button class="news-filter-btn" data-category="Écuries">🏎️ Écuries</button>
+        <button class="news-filter-btn" data-category="Technique">⚙️ Technique</button>
+        <button class="news-filter-btn" data-category="Transferts">🔄 Transferts</button>
+        <button class="news-filter-btn" data-category="Interviews">🎙️ Interviews</button>
+      </div>
+      <div class="news-search-wrapper">
+        <span class="news-search-icon">🔍</span>
+        <input type="search" id="news-search-input" placeholder="Rechercher un pilote, équipe, actualité…" aria-label="Rechercher" />
+        <span id="news-count" class="news-count-badge"></span>
+      </div>
+    </div>
+
+    <div id="news-grid" class="news-grid">
+      <div class="news-loading-spinner">Chargement des actualités en direct…</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <!-- Overlay Paramètres                                                     -->
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <div id="settings-backdrop" class="settings-backdrop" hidden></div>
@@ -313,6 +492,8 @@
           <select id="layout-preset-select" class="settings-select" style="flex:1">
             <option value="broadcast">📺 Broadcast (défaut)</option>
             <option value="focus-map">🗺️ Focus carte</option>
+            <option value="compare">⚡ Télémétrie Head-to-Head</option>
+            <option value="radios">📻 Radios & Stratégie</option>
             <option value="minimal">🪶 Minimal</option>
             <option value="custom" disabled>✏️ Personnalisé</option>
           </select>
@@ -342,6 +523,16 @@
         <label class="toggle-row">
           <span>Commentaires live</span>
           <input type="checkbox" id="ov-vis-ov-commentary" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Télémétrie comparative</span>
+          <input type="checkbox" id="ov-vis-ov-compare" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Radios d'équipes</span>
+          <input type="checkbox" id="ov-vis-ov-radio" checked />
           <span class="toggle-track"></span>
         </label>
       </div>
@@ -378,6 +569,11 @@
           <input type="checkbox" id="pref-sc-colors" checked />
           <span class="toggle-track"></span>
         </label>
+        <div class="settings-section-subtitle" style="margin-top: 14px; margin-bottom: 6px;">Format Timing Tower</div>
+        <div class="btn-group" id="pref-tower-mode-group">
+          <button class="btn-choice active" data-tower-mode="expanded">📐 Aéré / Étendu (recommandé)</button>
+          <button class="btn-choice" data-tower-mode="compact">📑 Compact (classique)</button>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -408,6 +604,77 @@
         <div class="settings-section-title">Pilotes épinglés</div>
         <p class="settings-hint">Maintenez Ctrl/Cmd pour sélectionner plusieurs pilotes.</p>
         <select id="pref-favorite-driver" class="settings-select" multiple size="6"></select>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Stratégie & Arrêts aux stands</div>
+        <p class="settings-hint">Ajustez la durée moyenne du changement de 4 pneus pour recalibrer le simulateur de sortie.</p>
+        <div class="slider-row">
+          <span id="pit-stop-time-display">2.4s</span>
+          <input type="range" id="pref-pit-stop-time" min="1.8" max="6.0" step="0.1" value="2.4" />
+          <span>Arrêt stationnaire moyen</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">🔔 Notifications & Alertes Stratège</div>
+        <p class="settings-hint">Toasts visuels et signaux acoustiques déclenchés sur micro-événements en direct.</p>
+        
+        <label class="toggle-row">
+          <span>Activer les alertes en direct</span>
+          <input type="checkbox" id="pref-alerts-enabled" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Alertes sonores dédiées</span>
+          <input type="checkbox" id="pref-alerts-sound" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Restreindre aux pilotes favoris épinglés</span>
+          <input type="checkbox" id="pref-alerts-fav-only" />
+          <span class="toggle-track"></span>
+        </label>
+        <div class="settings-action-row" style="margin: 8px 0;">
+          <button id="pref-alerts-desktop-btn" class="btn-sm" style="width: 100%; justify-content: center;">💻 Autoriser notifications bureau (OS)</button>
+        </div>
+
+        <div class="settings-section-subtitle">Déclencheurs surveillés</div>
+        <label class="toggle-row">
+          <span>Arrêts aux stands</span>
+          <input type="checkbox" id="pref-alert-pit" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Safety Car, VSC & Drapeau Rouge</span>
+          <input type="checkbox" id="pref-alert-sc" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Meilleur tour en course</span>
+          <input type="checkbox" id="pref-alert-best-lap" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Changement de leader</span>
+          <input type="checkbox" id="pref-alert-lead" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Dépassements (pilotes suivis)</span>
+          <input type="checkbox" id="pref-alert-positions" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Enquêtes et pénalités commissaires</span>
+          <input type="checkbox" id="pref-alert-stewards" checked />
+          <span class="toggle-track"></span>
+        </label>
+        <label class="toggle-row">
+          <span>Détection de pluie</span>
+          <input type="checkbox" id="pref-alert-rain" checked />
+          <span class="toggle-track"></span>
+        </label>
       </div>
 
       <div class="settings-section">
@@ -523,6 +790,9 @@
   </div>
 
   <div id="offline-banner" hidden style="display:none!important">Connexion perdue — Reconnexion en cours…</div>
+
+  <!-- Conteneur d'alertes & toasts stratège (Proposal 5) -->
+  <div id="alerts-toast-container" class="alerts-toast-container" aria-live="polite"></div>
 
   <script type="module" src="js/app.js"></script>
 

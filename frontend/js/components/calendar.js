@@ -185,11 +185,58 @@ function showOverlay(race) {
   }
   overlayBody.appendChild(badgesDiv);
 
-  // ── Info circuit ────────────────────────────────────────────────────
-  const infoDiv = document.createElement("div");
-  infoDiv.className = "gpd-circuit-info";
-  infoDiv.innerHTML = `<span class="gpd-circuit-icon">📍</span><span>${race.circuit}</span><span class="gpd-country">${race.country || ""}</span>`;
-  overlayBody.appendChild(infoDiv);
+  // ── Info & Illustration circuit ──────────────────────────────────────
+  const cid = race.circuit_id;
+  const spec = (cid && store.circuits_meta && store.circuits_meta[cid])
+    || (store.circuits_meta && store.circuits_meta[race.circuit])
+    || (store.circuits_meta && Object.values(store.circuits_meta).find(c => 
+        (c.name && race.circuit && c.name.toLowerCase().includes(race.circuit.toLowerCase())) ||
+        (race.circuit && c.name && race.circuit.toLowerCase().includes(c.name.toLowerCase()))
+    ))
+    || race;
+
+  const circuitCard = document.createElement("div");
+  circuitCard.className = "gpd-circuit-card";
+
+  const imgSource = spec?.track_image_url || spec?.image_url || race.image_url;
+  const trackImg = imgSource
+    ? `<div class="gpd-track-banner"><img src="${imgSource}" alt="Tracé de ${race.circuit}" onerror="this.parentElement.style.display='none'" /></div>`
+    : "";
+
+  const recordStr = spec?.lap_record
+    ? `${spec.lap_record.time} (${spec.lap_record.driver} · ${spec.lap_record.year})`
+    : "—";
+
+  const histText = spec?.history || spec?.history_summary || "";
+
+  circuitCard.innerHTML = `
+    ${trackImg}
+    <div class="gpd-circuit-info">
+      <span class="gpd-circuit-icon">📍</span>
+      <span class="gpd-circuit-name">${race.circuit}</span>
+      <span class="gpd-country">${race.country || ""}</span>
+    </div>
+    <div class="gpd-specs-grid">
+      <div class="gpd-spec-item"><span class="gpd-spec-val">${spec?.length_km || race.circuit_length_km || "—"} km</span><span class="gpd-spec-lbl">Longueur</span></div>
+      <div class="gpd-spec-item"><span class="gpd-spec-val">${spec?.turns || "—"}</span><span class="gpd-spec-lbl">Virages</span></div>
+      <div class="gpd-spec-item"><span class="gpd-spec-val">${spec?.drs_zones || "—"}</span><span class="gpd-spec-lbl">Zones DRS</span></div>
+      <div class="gpd-spec-item"><span class="gpd-spec-val">${race.circuit_laps || spec?.circuit_laps || "—"}</span><span class="gpd-spec-lbl">Tours GP</span></div>
+    </div>
+    <div class="gpd-record-bar">
+      <span class="gpd-record-title">⚡ Record du tour :</span>
+      <span class="gpd-record-val">${recordStr}</span>
+    </div>
+    ${spec?.characteristics ? `
+    <div class="gpd-chars-bar">
+      <span class="gpd-char-chip">Appui : ${spec.characteristics.downforce || "Moyen"}</span>
+      <span class="gpd-char-chip">Grip : ${spec.characteristics.grip || spec.characteristics.tire_stress || "Moyen"}</span>
+      <span class="gpd-char-chip">Pneus : ${spec.characteristics.tyre_stress || spec.characteristics.tire_stress || "Moyen"}</span>
+    </div>` : ""}
+    ${histText ? `
+    <div class="gpd-circuit-history">
+      <p>${histText}</p>
+    </div>` : ""}`;
+  overlayBody.appendChild(circuitCard);
 
   if (race.cancelled) {
     const msg = document.createElement("p");

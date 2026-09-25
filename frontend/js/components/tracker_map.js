@@ -12,6 +12,7 @@
  */
 
 import { onUpdate, store, updateStore } from "../store.js";
+import { computePitExitPosition } from "./pit_strategy.js";
 
 const canvas = document.getElementById("track-canvas");
 const ctx    = canvas ? canvas.getContext("2d") : null;
@@ -49,6 +50,7 @@ const _ghostTrails   = new Map();
 const _particles     = [];
 let   _flashAnim     = null;
 let   _currentSessionKey = null;
+let   _scrubPoint    = null;
 
 export function resetTrackData() {
   _apiTrackPoints      = [];
@@ -491,8 +493,202 @@ function render() {
     ctx.fillText(driver.acronym || "", px, labelY);
   }
 
+  _renderPitGhostCar(cw, ch, isLight);
+  _renderTelemetryScrub(cw, ch, isLight);
   _renderBadge(cw, ch, isSimMode, isArchiveMode);
   requestAnimationFrame(render);
+}
+
+function _renderPitGhostCar(cw, ch, isLight) {
+  const standings = currentStandings || [];
+  if (!standings.length) return;
+
+  const targetNum = store.pitGhostDriver || (store.pitStrategyMode ? standings[0]?.driver_number : null);
+  if (!targetNum) return;
+
+  const driver = standings.find(d => d.driver_number === targetNum);
+  if (!driver || driver.retired || !driver.x || !driver.y) return;
+
+  const circuitName = store.session?.circuit_name || "Albert Park";
+  const trackStatus = store.session?.track_status || "1";
+  const pred = computePitExitPosition(driver, standings, circuitName, trackStatus);
+  if (!pred) return;
+
+  const pts = _activeTrackPoints.length >= 5
+    ? _activeTrackPoints
+    : (_apiTrackPoints.length >= 5 ? _apiTrackPoints : _importedTrackPoints);
+
+  if (pts.length < 10) return;
+
+  let curIdx = 0, minDistSq = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const dx = pts[i].x - driver.x;
+    const dy = pts[i].y - driver.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < minDistSq) {
+      minDistSq = distSq;
+      curIdx = i;
+    }
+  }
+
+  const curRatio = curIdx / pts.length;
+  const lapTimeSec = 88.0;
+  const fractionLost = pred.lossApplied / lapTimeSec;
+  const ghostRatio = (curRatio - fractionLost + 10.0) % 1.0;
+
+  const ghostIdx = Math.max(0, Math.min(pts.length - 1, Math.floor(ghostRatio * (pts.length - 1))));
+  const ghostPt = pts[ghostIdx];
+  if (!ghostPt || ghostPt.x === undefined || ghostPt.y === undefined) return;
+
+  const [gx, gy] = normalise(ghostPt.x, ghostPt.y, cw, ch);
+  const [dx, dy] = normalise(driver.x, driver.y, cw, ch);
+
+  const teamColor = driver.team_color || "#3671c6";
+  const pulse = Math.sin(Date.now() / 180);
+
+  ctx.save();
+
+  // 1. Ligne en pointillés reliant la monoplace réelle à sa voiture fantôme
+  ctx.beginPath();
+  ctx.moveTo(dx, dy);
+  ctx.lineTo(gx, gy);
+  ctx.strokeStyle = `${teamColor}66`;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 2. Halo extérieur pulsant
+  const ghostR = 8 + pulse * 2;
+  ctx.beginPath();
+  ctx.arc(gx, gy, ghostR + 4, 0, Math.PI * 2);
+  ctx.fillStyle = `${teamColor}22`;
+  ctx.fill();
+
+  // 3. Disque fantôme avec contour pointillé
+  ctx.beginPath();
+  ctx.arc(gx, gy, ghostR, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(10, 15, 25, 0.75)";
+  ctx.fill();
+
+  ctx.strokeStyle = teamColor;
+  ctx.lineWidth = 1.8;
+  ctx.setLineDash([3, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 4. Point focal intérieur
+  ctx.beginPath();
+  ctx.arc(gx, gy, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  // 5. Étiquette fantôme
+  const label = `👻 ${driver.acronym} SORTIE STAND (P${pred.projectedPosition})`;
+  ctx.font = "bold 9px 'JetBrains Mono', monospace";
+  const tw = ctx.measureText(label).width;
+  const chipW = tw + 14;
+  const chipH = 18;
+  const chipX = Math.max(8, Math.min(cw - chipW - 8, gx - chipW / 2));
+  const chipY = gy - ghostR - 16;
+
+  ctx.fillStyle = "rgba(14, 18, 28, 0.92)";
+  ctx.strokeStyle = pred.trafficRiskColor || teamColor;
+  ctx.lineWidth = 1.2;
+  ctx.shadowColor = pred.trafficRiskColor || teamColor;
+  ctx.shadowBlur = 8;
+
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(chipX, chipY, chipW, chipH, 4);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(chipX, chipY, chipW, chipH);
+    ctx.strokeRect(chipX, chipY, chipW, chipH);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = pred.trafficRiskColor || "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, chipX + chipW / 2, chipY + chipH / 2);
+
+  ctx.restore();
+}
+
+function _renderTelemetryScrub(cw, ch, isLight) {
+  if (!_scrubPoint || Date.now() - _scrubPoint.receivedAt > 3500) return;
+
+  const pts = _activeTrackPoints.length >= 5
+    ? _activeTrackPoints
+    : (_apiTrackPoints.length >= 5 ? _apiTrackPoints : _importedTrackPoints);
+
+  if (pts.length < 2) return;
+
+  const idx = Math.max(0, Math.min(pts.length - 1, Math.floor(_scrubPoint.ratio * (pts.length - 1))));
+  const pt = pts[idx];
+  if (!pt || pt.x === undefined || pt.y === undefined) return;
+
+  const [sx, sy] = normalise(pt.x, pt.y, cw, ch);
+
+  const pulse = Math.sin(Date.now() / 140);
+  const ringRadius = 14 + pulse * 4;
+
+  ctx.save();
+
+  // Halo extérieur pulsant
+  ctx.beginPath();
+  ctx.arc(sx, sy, ringRadius + 4, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0, 210, 190, 0.15)";
+  ctx.fill();
+
+  // Anneau lumineux
+  ctx.beginPath();
+  ctx.arc(sx, sy, ringRadius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#00d2be";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = "#00d2be";
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+
+  // Point focal central
+  ctx.beginPath();
+  ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowBlur = 6;
+  ctx.fill();
+
+  // Bulle d'information flottante au-dessus du repère
+  const label = `📍 ${Math.round(_scrubPoint.distance)}m · Δ ${_scrubPoint.delta >= 0 ? "+" : ""}${_scrubPoint.delta?.toFixed(3)}s`;
+  ctx.font = "bold 9px 'JetBrains Mono', monospace";
+  const tw = ctx.measureText(label).width;
+  const chipW = tw + 14;
+  const chipH = 18;
+  const chipX = Math.max(8, Math.min(cw - chipW - 8, sx - chipW / 2));
+  const chipY = sy - ringRadius - 16;
+
+  ctx.fillStyle = "rgba(10, 15, 25, 0.9)";
+  ctx.strokeStyle = "#00d2be";
+  ctx.lineWidth = 1;
+  ctx.shadowBlur = 8;
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(chipX, chipY, chipW, chipH, 4);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(chipX, chipY, chipW, chipH);
+    ctx.strokeRect(chipX, chipY, chipW, chipH);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#00d2be";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, chipX + chipW / 2, chipY + chipH / 2);
+
+  ctx.restore();
 }
 
 function _drawTrack(cw, ch, isLight) {
@@ -664,6 +860,24 @@ export function initTrackerMap() {
   if (location.hash === "#telemetry") {
     requestAnimationFrame(resizeCanvas);
   }
+
+  // Écoute de l'événement de scrub télémétrique
+  window.addEventListener("telemetry-scrub", (e) => {
+    if (!e.detail) {
+      _scrubPoint = null;
+    } else {
+      _scrubPoint = {
+        ratio: e.detail.ratio,
+        distance: e.detail.distance,
+        speedA: e.detail.speedA,
+        speedB: e.detail.speedB,
+        delta: e.detail.delta,
+        driverA: e.detail.driverA,
+        driverB: e.detail.driverB,
+        receivedAt: Date.now(),
+      };
+    }
+  });
 
   // Restaurer GeoJSON importé depuis le store (persisté en session)
   if (store.importedTrackGeoJSON && store.trackDisplayMode === "imported") {

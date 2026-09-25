@@ -15,8 +15,12 @@ import { initSettings }       from "./components/settings.js";
 import { initLiveEvents }     from "./components/live_events.js";
 import { initOverlayManager } from "./components/overlay_manager.js";
 import { initCommentary }     from "./components/commentary.js";
+import { initHeadToHead }     from "./components/head_to_head.js";
+import { initRadioPlayer }    from "./components/radio_player.js";
+import { initAlertsEngine }   from "./components/alerts_engine.js";
 import { initHome }           from "./components/home.js";
 import { initResults }        from "./components/results.js";
+import { initNews }           from "./components/news.js";
 import { playSound, setSoundEnabled, setSoundVolume } from "./components/sound_engine.js";
 import { initNavLinks, activateView, setNavSoundPlayer, KNOWN_HASHES } from "./nav.js";
 
@@ -143,6 +147,70 @@ const _sbWind      = document.getElementById("sb-wind");
 const _sbRain      = document.getElementById("sb-rain");
 const _sbLocalTime = document.getElementById("sb-local-time");
 const _sbSessionKey= document.getElementById("sb-session-key");
+const _livePill    = document.getElementById("live-status-pill");
+const _liveLabel   = document.getElementById("live-status-label");
+const _sbSource    = document.getElementById("sb-live-source");
+
+function _updateLiveStatus(state) {
+  const ing = state.ingestionStatus;
+  const mode = state.sessionMode;
+  const isSim = state._simulation || mode === "simulation";
+  const isArchive = state._archive || mode === "archive";
+
+  let label = "En attente";
+  let cls = "status-connecting";
+  let tooltip = "Initialisation de la connexion...";
+  let sourceTag = "DÉTECTION";
+
+  if (isSim) {
+    label = "Simulation active";
+    cls = "status-simulation";
+    tooltip = "Mode simulation : Rejeu haute fréquence de télémétrie";
+    sourceTag = "🎮 SIMULATION";
+  } else if (mode === "offline") {
+    label = "Mode Hors-ligne";
+    cls = "status-offline";
+    tooltip = "Données locales en cache";
+    sourceTag = "✈ OFFLINE";
+  } else if (mode === "preparing") {
+    label = "Séance en préparation";
+    cls = "status-preparing";
+    tooltip = "En attente du signal vert de la FIA";
+    sourceTag = "⏱ PRÉPARATION";
+  } else if (ing && (ing.has_token || ing.mode === "live_f1tv_token")) {
+    label = "Direct officiel (Token actif)";
+    cls = "status-official-live";
+    tooltip = `Flux officiel F1 TV actif · Latence temps réel : ~${ing.latency_ms || 100}ms`;
+    sourceTag = `⚡ F1TV LIVE (${ing.latency_ms || 100}ms)`;
+  } else if (ing && ing.mode === "live_openf1") {
+    const latSec = Math.round((ing.latency_ms || 2500) / 1000);
+    label = `En direct (Délai OpenF1 ~${latSec}s)`;
+    cls = "status-openf1-live";
+    tooltip = `Flux public OpenF1 (Polling optimisé à 900ms) · Tolérance 429/502 active`;
+    sourceTag = `📡 OPENF1 (+${latSec}s)`;
+  } else if (mode === "live") {
+    label = "En direct (API)";
+    cls = "status-live";
+    tooltip = "Connexion télémétrie active";
+    sourceTag = "📡 LIVE";
+  } else if (isArchive) {
+    label = "Session Archivée";
+    cls = "status-archive";
+    tooltip = "Dernière séance terminée consultable en replay complet";
+    sourceTag = "📼 ARCHIVE";
+  }
+
+  if (_livePill) {
+    _livePill.className = `live-status-pill ${cls}`;
+    _livePill.title = tooltip;
+  }
+  if (_liveLabel) _liveLabel.textContent = label;
+  if (_sbSource) {
+    _sbSource.textContent = sourceTag;
+    _sbSource.className = `sb-live-source-pill ${cls}`;
+    _sbSource.title = tooltip;
+  }
+}
 
 function _updateBanner(state) {
   const sess    = state.session || {};
@@ -185,6 +253,7 @@ function _updateBanner(state) {
       sess.session_name || sess.session_type || "",
     ].filter(Boolean).join(" · ") || "—";
   }
+  _updateLiveStatus(state);
 }
 
 setInterval(() => {
@@ -208,7 +277,7 @@ function initOfflineBanner() {
 function initMobileTabs() {
   const tabs = document.querySelectorAll(".mob-tab");
   if (!tabs.length) return;
-  const tabOrder = ["ov-timing", "ov-map", "ov-rc", "ov-commentary"];
+  const tabOrder = ["ov-timing", "ov-map", "ov-rc", "ov-commentary", "ov-compare", "ov-radio"];
   let currentTabIndex = 0;
 
   function activateMobileTab(targetId) {
@@ -363,10 +432,14 @@ async function init() {
   initSimulation();
   initLiveEvents();
   initCommentary();
+  initHeadToHead();
+  initRadioPlayer();
+  initAlertsEngine();
 
   // Nouvelles pages
   initHome();
   initResults();
+  initNews();
 
   onUpdate(_updateBanner);
 

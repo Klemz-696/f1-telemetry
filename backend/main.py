@@ -31,10 +31,22 @@ from influx_client import query_latest_state, get_client, close_client
 from models import (
     BroadcastPayload,
     DriverTelemetry,
+    IngestionStatus,
     RaceControlMessage,
     SessionState,
     WeatherState,
+    TeamRadioMessage,
 )
+from news_sync import sync_news
+try:
+    from telemetry_compare import generate_synthesized_comparison
+except ImportError:
+    from backend.telemetry_compare import generate_synthesized_comparison
+
+try:
+    from radio_sync import sync_radios, get_latest_radios
+except ImportError:
+    from backend.radio_sync import sync_radios, get_latest_radios
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,22 +64,49 @@ API_ALLOWED_ORIGINS = [
     if o.strip()
 ]
 
+async def _news_background_loop():
+    """Tâche d'arrière-plan pour rafraîchir périodiquement les actualités F1."""
+    await asyncio.sleep(2)
+    while True:
+        try:
+            await sync_news()
+        except Exception as e:
+            logger.warning("Erreur sync_news en tâche de fond : %s", e)
+        await asyncio.sleep(900)  # 15 minutes
+
+
+async def _radio_background_loop():
+    """Tâche d'arrière-plan pour synchroniser et ingérer les radios d'équipes."""
+    await asyncio.sleep(1)
+    while True:
+        try:
+            await sync_radios()
+        except Exception as e:
+            logger.warning("Erreur sync_radios en tâche de fond : %s", e)
+        await asyncio.sleep(4)  # Poll toutes les 4 secondes
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Remplace @app.on_event('startup') : démarre la boucle ET ferme Influx."""
+    """Démarre les boucles de broadcast, d'actualités et de radios ET gère la fermeture."""
     await get_client()  # chauffe le client singleton
-    task = asyncio.create_task(broadcast_loop())
-    logger.info("Lifespan : broadcast_loop démarrée")
+    broadcast_task = asyncio.create_task(broadcast_loop())
+    news_task = asyncio.create_task(_news_background_loop())
+    radio_task = asyncio.create_task(_radio_background_loop())
+    logger.info("Lifespan : broadcast_loop, news_loop et radio_loop démarrées")
     try:
         yield
     finally:
-        task.cancel()
+        broadcast_task.cancel()
+        news_task.cancel()
+        radio_task.cancel()
         try:
-            await task
-        except asyncio.CancelledError:
+            await asyncio.gather(broadcast_task, news_task, radio_task, return_exceptions=True)
+        except Exception:
             pass
         await close_client()
-        logger.info("Lifespan : client Influx fermé")
+        logger.info("Lifespan : tâches arrêtées et client Influx fermé")
+
 
 app = FastAPI(title="F1 Telemetry API", docs_url=None, redoc_url=None, lifespan=lifespan)
 
@@ -190,7 +229,7 @@ async def assemble_payload() -> BroadcastPayload:
     # Race Control : désormais lu depuis le fichier d'état (A1 — ferme la boucle
     # consumer→fichier→main ; la measurement Influx fantôme est supprimée).
     # Tous les fichiers d'état sont lus concurremment hors event loop.
-    timing, weather_raw, track_raw, session_info, lap_count, extrap_clock, rc_raw = \
+    timing, weather_raw, track_raw, session_info, lap_count, extrap_clock, rc_raw, ingestion_raw, radio_raw = \
         await asyncio.gather(
             _read_state_file("TimingData"),
             _read_state_file("WeatherData"),
@@ -199,7 +238,12 @@ async def assemble_payload() -> BroadcastPayload:
             _read_state_file("LapCount"),
             _read_state_file("ExtrapolatedClock"),
             _read_state_file("RaceControlMessages"),
+            _read_state_file("IngestionStatus"),
+            _read_state_file("TeamRadio"),
         )
+
+    ingestion_status = IngestionStatus(**ingestion_raw) if ingestion_raw else IngestionStatus()
+
 
     # Index par pilote — une seule ligne complète par driver (pivot corrigé, B1)
     by_driver: dict[str, dict] = {}
@@ -349,13 +393,21 @@ async def assemble_payload() -> BroadcastPayload:
         for m in rc_list
     ]
 
+    team_radios_raw = radio_raw.get("radios", []) if isinstance(radio_raw, dict) else []
+    if not team_radios_raw:
+        team_radios_raw = get_latest_radios(limit=15)
+    team_radios = [TeamRadioMessage(**r) for r in team_radios_raw[:15]]
+
     return BroadcastPayload(
         server_ts=time.time(),
         session=session,
         standings=standings,
         weather=weather,
         race_control=rc_messages,
+        ingestion_status=ingestion_status,
+        team_radios=team_radios,
     )
+
 
 # ─── Boucle de diffusion (Broadcast Loop) ────────────────────────────────────
 
@@ -437,6 +489,107 @@ async def static_data():
         payload["last_race"] = last_race
 
     return JSONResponse(content=payload)
+
+
+@app.get("/news")
+@app.get("/api/news")
+async def get_news():
+    """
+    Retourne les dernières actualités F1 réelles francophones
+    scrapées depuis les médias spécialisés (F1i, Box-Box, Motorsport).
+    """
+    news_data = await _read_state_file("News")
+    if not news_data or not news_data.get("articles"):
+        try:
+            articles = await sync_news()
+            return JSONResponse(content={"articles": articles, "count": len(articles), "updated_at": time.time()})
+        except Exception as e:
+            logger.error("Erreur récupération actualités à la volée : %s", e)
+            return JSONResponse(content={"articles": [], "count": 0, "updated_at": time.time()})
+
+    return JSONResponse(
+        content=news_data,
+        headers={"Cache-Control": "public, max-age=180"},
+    )
+
+
+@app.get("/status")
+@app.get("/api/status")
+async def get_status():
+    """Retourne l'état courant de l'ingestion, de la session et des connexions."""
+    ingestion_raw = await _read_state_file("IngestionStatus")
+    session_raw = await _read_state_file("SessionInfo")
+    status = ingestion_raw or {
+        "mode": "archive",
+        "has_token": False,
+        "status_label": "Mode Archive",
+        "latency_ms": 0,
+        "last_sync": time.time(),
+        "transport": "http_polling",
+        "active_session": session_raw.get("Path", ""),
+    }
+    status["clients_connected"] = len(manager.active)
+    status["server_time"] = time.time()
+    return JSONResponse(content=status)
+
+
+@app.get("/telemetry/compare")
+@app.get("/api/telemetry/compare")
+async def get_telemetry_compare(
+    session_key: int = 0,
+    driver_a: int = 1,
+    driver_b: int = 16,
+    circuit: str = "Albert Park Circuit",
+):
+    """
+    Retourne la télémétrie comparative Head-to-Head normalisée par distance
+    entre deux pilotes (vitesse, accélérateur, frein, boîte, delta de temps cumulé).
+    """
+    if session_key == 0:
+        sess = await _read_state_file("SessionInfo")
+        session_key = sess.get("Key", 0) or 11253
+        if not circuit or circuit == "Albert Park Circuit":
+            circuit = sess.get("Meeting", {}).get("Circuit", {}).get("ShortName", circuit)
+
+    result = generate_synthesized_comparison(
+        session_key=session_key,
+        driver_a_num=driver_a,
+        driver_b_num=driver_b,
+        circuit_name=circuit,
+    )
+    return JSONResponse(content=result.model_dump())
+
+
+@app.get("/radio")
+@app.get("/api/radio")
+async def get_team_radios(
+    session_key: Optional[int] = None,
+    driver_number: Optional[int] = None,
+    category: Optional[str] = None,
+    limit: int = 50,
+):
+    """
+    Retourne la liste des communications radio d'équipes (OpenF1),
+    filtrable par session, pilote, et catégorie (STRATEGY, TIRE, TECHNICAL, INCIDENT, GENERAL).
+    """
+    radios = get_latest_radios(
+        session_key=session_key,
+        driver_number=driver_number,
+        category=category,
+        limit=min(limit, 100),
+    )
+    return JSONResponse(content={"radios": radios, "total": len(radios)})
+
+
+@app.get("/radio/driver/{driver_number}")
+@app.get("/api/radio/driver/{driver_number}")
+async def get_driver_radios(driver_number: int, limit: int = 30):
+    """
+    Retourne l'historique des communications radio d'un pilote spécifique.
+    """
+    radios = get_latest_radios(driver_number=driver_number, limit=min(limit, 50))
+    return JSONResponse(content={"driver_number": driver_number, "radios": radios, "total": len(radios)})
+
 
 # ─── Route WebSocket ──────────────────────────────────────────────────────────
 

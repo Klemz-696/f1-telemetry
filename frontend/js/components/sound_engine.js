@@ -265,6 +265,32 @@ const SOUNDS = {
     });
   },
 
+  /** Décision des commissaires / Enquête */
+  steward() {
+    const { ctx, gain } = _masterGain(0.28);
+    const t = ctx.currentTime;
+    _osc(ctx, gain, "sine", 320, t, 0.4, 0.7);
+    _osc(ctx, gain, "triangle", 160, t, 0.5, 0.6);
+  },
+
+  /** Alerte pluie / Météo */
+  rain() {
+    const { ctx, gain } = _masterGain(0.24);
+    const t = ctx.currentTime;
+    _osc(ctx, gain, "sine", 1200, t, 0.08, 0.4);
+    _osc(ctx, gain, "sine", 950, t + 0.1, 0.1, 0.5);
+    _osc(ctx, gain, "sine", 1400, t + 0.22, 0.08, 0.4);
+  },
+
+  /** Changement de leader en course */
+  lead_change() {
+    const { ctx, gain } = _masterGain(0.3);
+    const t = ctx.currentTime;
+    _osc(ctx, gain, "triangle", 440, t, 0.15, 0.6);
+    _osc(ctx, gain, "triangle", 554, t + 0.12, 0.18, 0.7);
+    _osc(ctx, gain, "triangle", 659, t + 0.26, 0.35, 0.8);
+  },
+
 };
 
 // ─── API publique ─────────────────────────────────────────────────────────────

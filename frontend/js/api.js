@@ -308,6 +308,8 @@ async function fetchAndStoreStaticData() {
   let _staticDrStandings = null;
   let _staticTmStandings = null;
   let _staticDrivers = null;
+  let _staticTeams = null;
+  let _staticCircuits = null;
   let _lastRace = null;
   let _seasonResults = null;
   try {
@@ -317,6 +319,8 @@ async function fetchAndStoreStaticData() {
       _staticDrStandings = _sd.drivers_standings || null;
       _staticTmStandings = _sd.teams_standings   || null;
       _staticDrivers = _sd.drivers || null;
+      _staticTeams = _sd.teams || null;
+      _staticCircuits = _sd.circuits || null;
       _lastRace = _sd.last_race || null;
       _seasonResults = _sd.season_results || null;
       console.info('[api] /api/static OK - ' + _staticCalendar.length + ' GPs statiques 2026');
@@ -408,6 +412,9 @@ async function fetchAndStoreStaticData() {
     drivers_standings: typeof _staticDrStandings !== 'undefined' && _staticDrStandings ? _staticDrStandings : drivers_standings,
     teams_standings: typeof _staticTmStandings !== 'undefined' && _staticTmStandings ? _staticTmStandings : teams_standings,
     drivers: driversDict,
+    teams_meta: _staticTeams || null,
+    circuits_meta: _staticCircuits || null,
+    drivers_meta: _staticDrivers || null,
     last_race: lr,
     season_results: typeof _seasonResults !== 'undefined' && _seasonResults ? _seasonResults : null,
     _standings_updated_at: Math.floor(Date.now() / 1000),
@@ -1091,6 +1098,8 @@ export function connectTelemetryWs() {
         if (payload.weather)              patch.weather     = payload.weather;
         if (payload.race_control)         patch.raceControl = payload.race_control;
         if (payload.standings && payload.standings.length > 0) patch.standings = payload.standings;
+        if (payload.ingestion_status)     patch.ingestionStatus = payload.ingestion_status;
+        if (payload.team_radios && payload.team_radios.length > 0) patch.team_radios = payload.team_radios;
         if (Object.keys(patch).length) updateStore(patch);
       } catch (e) { }
     });
