@@ -24,14 +24,11 @@ let _lastFetchTime = 0;
 
 function _getApiBase() {
   const h = window.location.hostname;
-  if (h === "localhost" || h === "127.0.0.1") {
-    // Si servi par un serveur statique direct (ex: port 8080 ou 3000), FastAPI tourne généralement sur 8000
-    if (window.location.port !== "8000" && window.location.port !== "") {
-      return "http://localhost:8000";
-    }
-    return "";
+  const p = window.location.port;
+  if (p === "8080" || p === "80" || p === "443" || p === "" || (h !== "localhost" && h !== "127.0.0.1")) {
+    return window.location.origin;
   }
-  return "";
+  return "http://localhost:8000";
 }
 
 /**

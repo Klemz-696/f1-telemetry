@@ -23,12 +23,12 @@ import { updateStore, store } from "./store.js";
 // - En production (servi par Nginx) : /proxy/ redirige vers f1_proxy:3001
 
 function detectProxy() {
-  const h = window.location.hostname;
-  if (h === "localhost" || h === "127.0.0.1") {
-    return "http://localhost:3001";
-  }
-  // Via Nginx : location /proxy/ → f1_proxy:3001
-  return `${window.location.origin}/proxy`;
+  const h = window.location.hostname;
+  const p = window.location.port;
+  if (p === "8080" || p === "80" || p === "443" || p === "" || (h !== "localhost" && h !== "127.0.0.1")) {
+    return `${window.location.origin}/proxy`;
+  }
+  return "http://localhost:3001";
 }
 
 const PROXY   = detectProxy();

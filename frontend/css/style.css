@@ -46,10 +46,10 @@ button:hover{opacity:.85}button:active{opacity:.7}
 .sb-local-time{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;background:var(--bg-hover);padding:2px 8px;border-radius:var(--radius)}
 .sb-session-key{font-size:9px;color:var(--text-muted);font-family:var(--font-mono)}
 
-.telemetry-layout{display:grid;grid-template-columns:440px 1fr 280px;height:100%}
-#timing-tower{background:var(--bg-card);border-right:1px solid var(--border);overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column}
-.tower-header{display:grid;grid-template-columns:28px 64px 78px 38px 38px 38px 78px 58px;gap:3px;padding:6px 8px;background:var(--bg);border-bottom:1px solid var(--border);color:var(--text-muted);font-size:9px;font-weight:700;letter-spacing:.1em;position:sticky;top:0;z-index:1;text-transform:uppercase}
-.tower-row{display:grid;grid-template-columns:28px 64px 78px 38px 38px 38px 78px 58px;gap:3px;padding:4px 8px;border-bottom:1px solid var(--border);align-items:center;transition:background var(--transition);min-height:34px}
+.telemetry-layout{display:grid;grid-template-columns:460px 1fr 280px;height:100%}
+#timing-tower{background:var(--bg-card);border-right:1px solid var(--border);overflow-y:auto;overflow-x:auto;scrollbar-width:thin;display:flex;flex-direction:column}
+.tower-header{display:grid;grid-template-columns:minmax(125px, 1.4fr) minmax(75px, 0.9fr) minmax(80px, 1fr) minmax(72px, 0.9fr) 40px 48px;gap:4px;padding:7px 10px;background:var(--bg);border-bottom:2px solid var(--border);color:var(--text-muted);font-size:10px;font-weight:800;letter-spacing:.08em;position:sticky;top:0;z-index:10;text-transform:uppercase;align-items:center;min-width:440px;box-sizing:border-box}
+.tower-row{display:grid;grid-template-columns:minmax(125px, 1.4fr) minmax(75px, 0.9fr) minmax(80px, 1fr) minmax(72px, 0.9fr) 40px 48px;gap:4px;padding:5px 10px;border-bottom:1px solid rgba(255,255,255,0.05);align-items:center;transition:background var(--transition);min-height:40px;min-width:440px;box-sizing:border-box}
 .tower-row:hover{background:var(--bg-hover)}
 .tower-row.in-pit{opacity:.5}.tower-row.retired{opacity:.3;text-decoration:line-through}
 .tower-row.pinned{background:var(--accent-glow);border-left:2px solid var(--accent)}
@@ -213,61 +213,103 @@ button:hover{opacity:.85}button:active{opacity:.7}
 
 /* ─── 1. Timing Tower — Driver Block encadré couleur écurie ─────────────── */
 
-/* tower-row : 8 colonnes [driver-block] gap S1 S2 S3 lap-time tyre pos± */
-.tower-row {
-  grid-template-columns: 110px 78px 40px 40px 40px 80px 58px 36px !important;
-  min-height: 36px;
-  padding: 3px 10px;
-}
-.tower-header {
-  grid-template-columns: 110px 78px 40px 40px 40px 80px 58px 36px !important;
-  font-size: 9px;
-  padding: 5px 10px;
-}
-
+/* ─── 1. Timing Tower — Driver Block encadré couleur écurie ─────────────── */
 .driver-block {
   display:          flex;
   align-items:      center;
-  gap:              5px;
-  padding:          3px 6px 3px 0;
-  border-left:      3px solid transparent;
+  gap:              8px;
+  padding:          3px 6px;
+  border-left:      3.5px solid transparent;
   border-radius:    var(--radius);
   overflow:         hidden;
+  min-width:        0;
   transition:       background var(--transition), border-left-color var(--transition);
+}
+
+.col-pos-sub {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--text-dim);
+  margin-right: 6px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.pos-delta-wrapper {
+  display:          flex;
+  flex-direction:   column;
+  align-items:      center;
+  justify-content:  center;
+  min-width:        22px;
+  flex-shrink:      0;
 }
 
 /* Numéro de position */
 .pos-badge {
   font-family: var(--font-mono);
-  font-size:   12px;
-  font-weight: 700;
-  color:       var(--text-muted);
-  min-width:   22px;
+  font-size:   13px;
+  font-weight: 800;
+  color:       var(--text);
+  line-height: 1.1;
   text-align:  center;
-  flex-shrink: 0;
+}
+
+.col-pos-delta {
+  font-family: var(--font-mono);
+  font-size:   8.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.col-pos-delta.delta-up   { color: var(--green, #00e676); }
+.col-pos-delta.delta-down { color: var(--accent, #e10600); }
+.col-pos-delta.delta-same { color: var(--text-dim, #777); }
+.col-pos-delta.hidden    { display: none; }
+
+.driver-id-wrap {
+  display:          flex;
+  flex-direction:   column;
+  justify-content:  center;
+  min-width:        0;
+  overflow:         hidden;
+}
+
+.driver-main-id {
+  display:          flex;
+  align-items:      baseline;
+  gap:              5px;
+  line-height:      1.1;
 }
 
 /* Acronyme 3 lettres */
 .driver-acro {
-  font-weight:     800;
-  font-size:       13px;
+  font-weight:     900;
+  font-size:       13.5px;
   letter-spacing:  .04em;
-  overflow:        hidden;
+  color:           #fff;
   white-space:     nowrap;
-  text-overflow:   ellipsis;
-  flex-shrink:     0;
 }
 
 /* Numéro du pilote */
 .driver-num {
   font-family:  var(--font-mono);
-  font-size:    10px;
+  font-size:    9.5px;
   font-weight:  600;
   color:        var(--text-dim);
-  opacity:      .7;
+  opacity:      .8;
   white-space:  nowrap;
-  flex-shrink:  0;
   letter-spacing: .02em;
+}
+
+.driver-name-sub {
+  font-family:   var(--font-ui);
+  font-size:     10px;
+  color:         var(--text-dim);
+  line-height:   1.2;
+  white-space:   nowrap;
+  overflow:      hidden;
+  text-overflow: ellipsis;
+  margin-top:    1px;
 }
 
 /* Meilleur tour : lap-time en purple gras */
@@ -357,21 +399,21 @@ button:hover{opacity:.85}button:active{opacity:.7}
 @media (max-width: 1100px) {
   .tower-row,
   .tower-header {
-    grid-template-columns: 92px 68px 32px 32px 32px 68px 50px 32px !important;
+    grid-template-columns: minmax(110px, 1.2fr) minmax(65px, 0.8fr) minmax(72px, 0.9fr) minmax(65px, 0.8fr) 36px 42px;
+    min-width: 390px;
   }
 }
 
 @media (max-width: 860px) {
-  /* Sur tablette : masquer S1/S2/S3 */
-  .tower-row    > .sector,
-  .tower-header > span:nth-child(3),
-  .tower-header > span:nth-child(4),
-  .tower-header > span:nth-child(5) {
+  /* Sur tablette : masquer secteurs si compact */
+  .tower-compact .tower-row > .sectors-wrap,
+  .tower-compact .tower-header > span:nth-child(3) {
     display: none;
   }
-  .tower-row,
-  .tower-header {
-    grid-template-columns: 92px 68px 80px 54px 36px !important;
+  .tower-compact .tower-row,
+  .tower-compact .tower-header {
+    grid-template-columns: minmax(110px, 1.3fr) minmax(68px, 0.9fr) minmax(65px, 0.9fr) 36px 42px;
+    min-width: 320px;
   }
 }
 
@@ -3065,7 +3107,8 @@ body[data-view="telemetry"] .drawer-mode-row { display: flex; flex-wrap: wrap; g
 /* Mode EXPANDED (Aéré / Spacieux) */
 #timing-tower.tower-expanded .tower-header {
   display: grid;
-  grid-template-columns: 52px 145px 110px 65px 65px 65px 105px 75px 65px;
+  grid-template-columns: minmax(130px, 1.5fr) minmax(75px, 0.9fr) minmax(82px, 1fr) minmax(74px, 0.9fr) 42px 48px;
+  gap: 5px;
   align-items: center;
   padding: 8px 12px;
   font-size: 10px;
@@ -3077,18 +3120,23 @@ body[data-view="telemetry"] .drawer-mode-row { display: flex; flex-wrap: wrap; g
   position: sticky;
   top: 0;
   z-index: 10;
+  min-width: 450px;
+  box-sizing: border-box;
 }
 
 #timing-tower.tower-expanded .tower-row {
   display: grid;
-  grid-template-columns: 52px 145px 110px 65px 65px 65px 105px 75px 65px;
+  grid-template-columns: minmax(130px, 1.5fr) minmax(75px, 0.9fr) minmax(82px, 1fr) minmax(74px, 0.9fr) 42px 48px;
+  gap: 5px;
   align-items: center;
   padding: 6px 12px;
-  min-height: 42px;
+  min-height: 44px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-family: var(--font-mono);
   font-size: 12px;
   transition: background .15s ease;
+  min-width: 450px;
+  box-sizing: border-box;
 }
 #timing-tower.tower-expanded .tower-row:hover {
   background: var(--bg-hover);
@@ -3098,32 +3146,45 @@ body[data-view="telemetry"] .drawer-mode-row { display: flex; flex-wrap: wrap; g
 #timing-tower.tower-expanded .driver-block {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border-left: 4px solid var(--border);
-  padding-left: 8px;
-  border-radius: 2px;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-width: 0;
 }
+
 #timing-tower.tower-expanded .pos-badge {
   font-size: 13px;
   font-weight: 900;
-  width: 20px;
+  color: var(--text);
+  line-height: 1.1;
   text-align: center;
 }
+
 #timing-tower.tower-expanded .driver-main-id {
   display: flex;
   align-items: baseline;
   gap: 5px;
+  line-height: 1.1;
 }
+
 #timing-tower.tower-expanded .driver-acro {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 900;
-  letter-spacing: .02em;
+  letter-spacing: .04em;
+  color: #fff;
+  white-space: nowrap;
 }
+
 #timing-tower.tower-expanded .driver-num {
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-dim);
   font-weight: 600;
+  white-space: nowrap;
 }
+
 #timing-tower.tower-expanded .driver-name-sub {
   font-size: 10px;
   color: var(--text-dim);
@@ -3131,8 +3192,9 @@ body[data-view="telemetry"] .drawer-mode-row { display: flex; flex-wrap: wrap; g
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 95px;
-  line-height: 1.1;
+  max-width: 105px;
+  line-height: 1.2;
+  margin-top: 2px;
 }
 
 /* Dual Gap display in expanded */
@@ -3140,72 +3202,156 @@ body[data-view="telemetry"] .drawer-mode-row { display: flex; flex-wrap: wrap; g
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.15;
 }
+
 #timing-tower.tower-expanded .gap-leader {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
   font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+#timing-tower.tower-expanded .gap-leader.is-leader {
+  color: #ffd700;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+
+#timing-tower.tower-expanded .gap-leader.is-loading {
+  color: #00d2be;
+  font-size: 9.5px;
+  font-style: italic;
+  font-family: var(--font-ui);
+}
+
 #timing-tower.tower-expanded .gap-interval {
-  font-size: 10px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
   color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
 /* Sectors chips in expanded */
-#timing-tower.tower-expanded .sector {
-  font-size: 11px;
-  text-align: center;
-  padding: 3px 5px;
-  border-radius: 4px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.03);
-  margin: 0 2px;
+.sectors-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  min-width: 0;
 }
+
+#timing-tower.tower-expanded .sector {
+  flex: 1;
+  font-size: 10px;
+  text-align: center;
+  padding: 3px 2px;
+  border-radius: 3px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
 #timing-tower.tower-expanded .sector.purple {
   background: rgba(186, 104, 200, 0.22);
   color: #ea80fc;
   border: 1px solid rgba(186, 104, 200, 0.45);
   text-shadow: 0 0 6px rgba(186, 104, 200, 0.7);
 }
+
 #timing-tower.tower-expanded .sector.green {
   background: rgba(76, 175, 80, 0.2);
   color: #69f0ae;
   border: 1px solid rgba(76, 175, 80, 0.4);
 }
+
 #timing-tower.tower-expanded .sector.yellow {
   background: rgba(255, 235, 59, 0.12);
   color: #fff59d;
   border: 1px solid rgba(255, 235, 59, 0.25);
 }
 
-/* Lap Time in expanded */
-#timing-tower.tower-expanded .lap-time {
-  font-size: 12px;
-  font-weight: 700;
+/* Lap Time & Strategy in expanded */
+.lap-cell-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
 }
+
+.lap-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+#timing-tower.tower-expanded .lap-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #timing-tower.tower-expanded .lap-time.purple {
   color: #ea80fc;
   text-shadow: 0 0 6px rgba(186, 104, 200, 0.7);
 }
 
-/* Status badges */
-.status-badge {
-  font-size: 9px;
+.best-lap-badge {
+  font-size: 8px;
   font-weight: 800;
+  color: #ea80fc;
   letter-spacing: .05em;
-  padding: 2px 5px;
+  white-space: nowrap;
+}
+
+/* Status badges */
+.tower-status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.status-badge {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  padding: 2px 4px;
   border-radius: 3px;
   text-align: center;
+  line-height: 1;
   display: inline-block;
 }
+
 .status-badge.badge-pit { background: #ff9800; color: #000; }
-.status-badge.badge-drs { background: #00e676; color: #000; }
-.status-badge.badge-out { background: #e53935; color: #fff; }
+.status-badge.badge-drs { background: #00e676; color: #000; box-shadow: 0 0 6px rgba(0, 230, 118, 0.4); }
+.status-badge.badge-ret { background: #e53935; color: #fff; }
 
 /* Tyre pill */
 .tyre-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  min-width: 0;
+  gap: 3px;
   font-size: 11px;
 }
 .tyre-dot {
@@ -3228,16 +3374,20 @@ body[data-view="telemetry"] .drawer-mode-row { display: flex; flex-wrap: wrap; g
 /* Mode COMPACT */
 #timing-tower.tower-compact .tower-header {
   display: grid;
-  grid-template-columns: 35px 95px 75px 48px 48px 48px 75px 50px 40px;
-  padding: 4px 6px;
+  grid-template-columns: minmax(85px, 1.2fr) minmax(62px, 0.8fr) minmax(68px, 0.9fr) minmax(60px, 0.8fr) 34px 38px;
+  gap: 3px;
+  padding: 5px 8px;
   font-size: 9px;
+  min-width: 350px;
 }
 #timing-tower.tower-compact .tower-row {
   display: grid;
-  grid-template-columns: 35px 95px 75px 48px 48px 48px 75px 50px 40px;
-  padding: 2px 6px;
-  min-height: 28px;
+  grid-template-columns: minmax(85px, 1.2fr) minmax(62px, 0.8fr) minmax(68px, 0.9fr) minmax(60px, 0.8fr) 34px 38px;
+  gap: 3px;
+  padding: 3px 8px;
+  min-height: 32px;
   font-size: 11px;
+  min-width: 350px;
 }
 #timing-tower.tower-compact .driver-name-sub,
 #timing-tower.tower-compact .gap-interval {

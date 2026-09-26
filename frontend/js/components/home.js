@@ -23,8 +23,11 @@ let _lastRaceCache=null;
 async function fetchLastRace(){
   if(_lastRaceCache)return _lastRaceCache;
   try{
-    const h=window.location.hostname;
-    const PROXY=(h==="localhost"||h==="127.0.0.1")?"http://localhost:3001":`${window.location.origin}/proxy`;
+    const h = window.location.hostname;
+    const p = window.location.port;
+    const PROXY = (p === "8080" || p === "80" || p === "443" || p === "" || (h !== "localhost" && h !== "127.0.0.1"))
+      ? `${window.location.origin}/proxy`
+      : "http://localhost:3001";
     const res=await fetch(`${PROXY}/jolpica/ergast/f1/${new Date().getFullYear()}/last/results.json`);
     if(!res.ok)throw new Error(res.status);
     const data=await res.json();

@@ -62,7 +62,7 @@ function createRow(driver) {
   row.className   = "tower-row";
   row.dataset.drv = driver.driver_number;
 
-  // 1. Driver block
+  // 1. Driver block (POS + Acro + Num + Nom)
   const driverBlock = document.createElement("div");
   driverBlock.className = "driver-block";
 
@@ -111,7 +111,10 @@ function createRow(driver) {
   }
   row.appendChild(sectorsWrap);
 
-  // 4. Temps au tour
+  // 4. Tour & Sortie Stand (Cellule combinée pour préserver l'alignement)
+  const lapCellContainer = document.createElement("div");
+  lapCellContainer.className = "lap-cell-container";
+
   const lapWrap = document.createElement("div");
   lapWrap.className = "lap-wrap";
   const lap = document.createElement("span");
@@ -120,9 +123,14 @@ function createRow(driver) {
   bestBadge.className = "best-lap-badge hidden";
   bestBadge.textContent = "⚡ MEILLEUR";
   lapWrap.append(lap, bestBadge);
-  row.appendChild(lapWrap);
 
-  // 5. Pneus (Jauge annulaire Pirelli)
+  const pitExitCell = document.createElement("div");
+  pitExitCell.className = "pit-exit-cell hidden";
+
+  lapCellContainer.append(lapWrap, pitExitCell);
+  row.appendChild(lapCellContainer);
+
+  // 5. Pneus (Jauge Pirelli)
   const tyre = document.createElement("div");
   tyre.className = "tyre-pill";
   tyre.style.cursor = "pointer";
@@ -156,11 +164,6 @@ function createRow(driver) {
   retBadge.textContent = "OUT";
   statusCell.append(pitBadge, drsBadge, retBadge);
   row.appendChild(statusCell);
-
-  // 7. Sortie Stand (Stratégie)
-  const pitExitCell = document.createElement("div");
-  pitExitCell.className = "pit-exit-cell hidden";
-  row.appendChild(pitExitCell);
 
   // Clic sur une ligne → sélectionne comme monoplace cible Ghost Car sur la carte
   row.addEventListener("click", () => {
@@ -247,6 +250,9 @@ function updateRow(driver, intervalText = "") {
     if (driver.position === 1 || rawGap === "0.000" || rawGap === "LEADER") {
       gapLeaderEl.textContent = "LEADER";
       gapLeaderEl.className   = "gap gap-leader is-leader";
+    } else if (rawGap.toUpperCase().includes("CONNEXION") || rawGap.toUpperCase().includes("CHARGEMENT")) {
+      gapLeaderEl.textContent = "Connexion…";
+      gapLeaderEl.className   = "gap gap-leader is-loading";
     } else {
       gapLeaderEl.textContent = rawGap ? (rawGap.startsWith("+") ? rawGap : `+${rawGap}`) : "—";
       gapLeaderEl.className   = "gap gap-leader";
@@ -256,8 +262,13 @@ function updateRow(driver, intervalText = "") {
   if (gapIntEl) {
     if (driver.position === 1) {
       gapIntEl.textContent = "1er";
+      gapIntEl.className   = "gap-interval is-leader";
+    } else if (rawGap.toUpperCase().includes("CONNEXION") || rawGap.toUpperCase().includes("CHARGEMENT") || intervalText.toUpperCase().includes("CONNEXION") || !intervalText) {
+      gapIntEl.textContent = "—";
+      gapIntEl.className   = "gap-interval";
     } else {
-      gapIntEl.textContent = intervalText ? `int: ${intervalText}` : "";
+      gapIntEl.textContent = intervalText.startsWith("int:") ? intervalText : `int: ${intervalText}`;
+      gapIntEl.className   = "gap-interval";
     }
   }
 
@@ -390,27 +401,14 @@ function syncTowerHeader() {
   }
 
   if (header) {
-    if (isExpanded) {
-      header.innerHTML = `
-        <span class="col-pos">POS</span>
-        <span class="col-driver">PILOTE</span>
-        <span class="col-gaps">ÉCARTS</span>
-        <span class="col-s1">S1</span>
-        <span class="col-s2">S2</span>
-        <span class="col-s3">S3</span>
-        ${isStrategy ? '<span class="col-pit-exit">SORTIE STAND (PROJETÉ)</span>' : '<span class="col-lap">DERNIER TOUR</span>'}
-        <span class="col-tyre">PNEUS</span>
-        <span class="col-status">STATUT</span>
-      `;
-    } else {
-      header.innerHTML = `
-        <span>PILOTE</span><span>ÉCART</span>
-        <span>S1</span><span>S2</span><span>S3</span>
-        ${isStrategy ? '<span class="col-pit-exit">SORTIE</span>' : '<span>TOUR</span>'}
-        <span>PNEU</span>
-        <span class="col-pos-delta hidden" id="col-pos-delta-header">POS±</span>
-      `;
-    }
+    header.innerHTML = `
+      <span class="col-driver"><span class="col-pos-sub">POS</span> PILOTE</span>
+      <span class="col-gaps">ÉCARTS</span>
+      <span class="col-sectors">SECTEURS</span>
+      <span class="col-lap">${isStrategy ? 'SORTIE STAND' : 'TOUR'}</span>
+      <span class="col-tyre">PNEUS</span>
+      <span class="col-status">STATUT</span>
+    `;
   }
 
   const toggleBtn = document.getElementById("tower-mode-toggle");

@@ -19,8 +19,11 @@ const ctx    = canvas ? canvas.getContext("2d") : null;
 
 function detectProxy() {
   const h = window.location.hostname;
-  if (h === "localhost" || h === "127.0.0.1") return "http://localhost:3001";
-  return `${window.location.origin}/proxy`;
+  const p = window.location.port;
+  if (p === "8080" || p === "80" || p === "443" || p === "" || (h !== "localhost" && h !== "127.0.0.1")) {
+    return `${window.location.origin}/proxy`;
+  }
+  return "http://localhost:3001";
 }
 const PROXY = detectProxy();
 

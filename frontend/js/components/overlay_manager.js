@@ -11,11 +11,11 @@ import { store, updateStore, savePrefs } from "../store.js";
 
 export const PRESET_LAYOUTS = {
   broadcast: {
-    "ov-timing":     { x: 0,  y: 0, w: 29, h: 100, visible: true,  z: 11 },
-    "ov-map":        { x: 29, y: 0, w: 48, h: 100, visible: true,  z: 10 },
+    "ov-timing":     { x: 0,  y: 0, w: 31, h: 100, visible: true,  z: 11 },
+    "ov-map":        { x: 31, y: 0, w: 46, h: 100, visible: true,  z: 10 },
     "ov-rc":         { x: 77, y: 0, w: 23, h: 100, visible: true,  z: 12 },
     "ov-commentary": { x: 77, y: 55, w: 23, h: 45, visible: false, z: 13 },
-    "ov-compare":    { x: 29, y: 55, w: 48, h: 45, visible: false, z: 14 },
+    "ov-compare":    { x: 31, y: 55, w: 46, h: 45, visible: false, z: 14 },
     "ov-radio":      { x: 77, y: 55, w: 23, h: 45, visible: false, z: 15 },
   },
   "focus-map": {

@@ -300,5 +300,5 @@ async def run_loop() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(sync_news())
+    asyncio.run(run_loop())
 

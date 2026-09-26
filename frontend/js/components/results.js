@@ -86,9 +86,11 @@ let _fetchPromise = null;
 
 function detectProxy() {
   const h = window.location.hostname;
-  return (h === "localhost" || h === "127.0.0.1")
-    ? "http://localhost:3001"
-    : `${window.location.origin}/proxy`;
+  const p = window.location.port;
+  if (p === "8080" || p === "80" || p === "443" || p === "" || (h !== "localhost" && h !== "127.0.0.1")) {
+    return `${window.location.origin}/proxy`;
+  }
+  return "http://localhost:3001";
 }
 
 function mapNormalizedRaceToErgast(normRace) {
