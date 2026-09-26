@@ -36,7 +36,7 @@ function _getApiBase() {
  */
 async function fetchComparisonData(force = false) {
   const now = Date.now();
-  if (!force && now - _lastFetchTime < 2500 && _telemetryData) {
+  if (!force && now - _lastFetchTime < 3500 && _telemetryData) {
     return;
   }
   _lastFetchTime = now;
@@ -45,31 +45,34 @@ async function fetchComparisonData(force = false) {
   const circuitName = store.session?.circuit_name || "Albert Park Circuit";
 
   const apiBase = _getApiBase();
-  const urlPrimary = `${apiBase}/api/telemetry/compare?session_key=${sessionKey}&driver_a=${_driverA}&driver_b=${_driverB}&circuit=${encodeURIComponent(circuitName)}`;
-  const urlFallback = `${apiBase}/telemetry/compare?session_key=${sessionKey}&driver_a=${_driverA}&driver_b=${_driverB}&circuit=${encodeURIComponent(circuitName)}`;
+  const query = `session_key=${sessionKey}&driver_a=${_driverA}&driver_b=${_driverB}&circuit=${encodeURIComponent(circuitName)}`;
+
+  const endpoints = [`${apiBase}/api/telemetry/compare?${query}`];
+  if (apiBase.includes(":8000")) {
+    endpoints.push(`${apiBase}/telemetry/compare?${query}`);
+  }
 
   _isLoading = true;
   _updateSummaryHeader();
 
-  try {
-    let res = null;
+  let data = null;
+  for (const ep of endpoints) {
     try {
-      res = await fetch(urlPrimary, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      res = await fetch(urlFallback, { cache: "no-store" });
-    }
+      const res = await fetch(ep, { cache: "no-store", headers: { Accept: "application/json" } });
+      const ct = res.headers.get("content-type") || "";
+      if (res.ok && ct.includes("application/json")) {
+        data = await res.json();
+        if (data?.telemetry_points?.length) break;
+      }
+    } catch {}
+  }
 
-    if (res && res.ok) {
-      const data = await res.json();
-      _telemetryData = data;
-      _isLoading = false;
-      _updateSummaryHeader();
-      _drawCanvas();
-      return;
-    }
-  } catch (err) {
-    console.warn("[head_to_head] Erreur API télémétrie comparative, génération client de secours :", err);
+  if (data && data.telemetry_points && data.telemetry_points.length > 0) {
+    _telemetryData = data;
+    _isLoading = false;
+    _updateSummaryHeader();
+    _drawCanvas();
+    return;
   }
 
   // Fallback client local synthétique haute fidélité
