@@ -18,17 +18,45 @@ except ImportError:
 
 def _find_driver_meta(driver_number: int) -> dict:
     """Retrouve les métadonnées d'un pilote selon son numéro permanent."""
-    for d in DRIVERS_2026:
-        if d.get("number") == driver_number:
-            return d
-    # Fallback générique
-    return {
-        "number": driver_number,
-        "acronym": f"D{driver_number}",
-        "name": f"Pilote #{driver_number}",
-        "team": "F1 Team",
-        "color": "#e10600",
-    }
+    meta = None
+    if isinstance(DRIVERS_2026, dict):
+        if driver_number in DRIVERS_2026:
+            meta = dict(DRIVERS_2026[driver_number])
+        elif str(driver_number) in DRIVERS_2026:
+            meta = dict(DRIVERS_2026[str(driver_number)])
+        else:
+            for k, v in DRIVERS_2026.items():
+                if isinstance(v, dict) and v.get("number") == driver_number:
+                    meta = dict(v)
+                    break
+    elif isinstance(DRIVERS_2026, list):
+        for d in DRIVERS_2026:
+            if isinstance(d, dict) and d.get("number") == driver_number:
+                meta = dict(d)
+                break
+
+    if not meta:
+        meta = {
+            "number": driver_number,
+            "acronym": f"D{driver_number}",
+            "name": f"Pilote #{driver_number}",
+            "team": "F1 Team",
+        }
+
+    try:
+        from backend.data.f1_2026 import get_driver_color
+    except ImportError:
+        try:
+            from data.f1_2026 import get_driver_color
+        except ImportError:
+            get_driver_color = None
+
+    if get_driver_color:
+        meta["color"] = get_driver_color(driver_number, meta.get("team"))
+    elif "color" not in meta:
+        meta["color"] = "#e10600"
+
+    return meta
 
 
 def _get_circuit_profile(circuit_name: str) -> tuple[float, list[dict]]:

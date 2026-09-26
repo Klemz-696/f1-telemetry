@@ -259,19 +259,57 @@ function getTeamColor(teamName, rawColour) {
 
 // ─── 1. DONNÉES STATIQUES ─────────────────────────────────────────────────────
 
+export function applyStaticPayloadToStore(sd) {
+  if (!sd || !Array.isArray(sd.calendar) || sd.calendar.length === 0) return false;
+
+  const driversDict = parseStaticDrivers(sd.drivers || FALLBACK_DRIVERS_2026);
+  const patch = {
+    calendar: sd.calendar,
+    drivers_standings: sd.drivers_standings || FALLBACK_DRIVERS_STANDINGS,
+    teams_standings: sd.teams_standings || FALLBACK_TEAMS_STANDINGS,
+    drivers: driversDict,
+    teams_meta: sd.teams || null,
+    circuits_meta: sd.circuits || null,
+    drivers_meta: sd.drivers || null,
+    last_race: sd.last_race || null,
+    season_results: sd.season_results || null,
+    _standings_updated_at: Math.floor(Date.now() / 1000),
+  };
+
+  updateStore(patch);
+  ssSet("static_data", patch, 2 * 3600 * 1000);
+  return true;
+}
+
 export async function loadStaticData() {
-  setStatus(false, "● Chargement…");
+  setStatus(false, "● Chargement…");
 
-  const cachedStatic = ssGet("static_data");
-  if (cachedStatic) {
-    updateStore(cachedStatic);
-    setStatus(true, "● EN LIGNE");
-    console.info(`[api] Données statiques depuis sessionStorage (${cachedStatic.calendar?.length ?? 0} GPs)`);
-    refreshStaticDataBackground();
-    return;
-  }
+  // 1. SessionStorage si déjà présent
+  const cachedStatic = ssGet("static_data");
+  if (cachedStatic) {
+    updateStore(cachedStatic);
+    setStatus(true, "● EN LIGNE");
+    console.info(`[api] Données statiques depuis sessionStorage (${cachedStatic.calendar?.length ?? 0} GPs)`);
+    setTimeout(refreshStaticDataBackground, 200);
+    return;
+  }
 
-  await fetchAndStoreStaticData();
+  // 2. Chargement instantané en amont depuis FastAPI (/api/static, < 30ms)
+  try {
+    const sd = await apiFetch(window.location.origin + '/api/static', 1);
+    if (applyStaticPayloadToStore(sd)) {
+      setStatus(true, "● EN LIGNE");
+      console.info(`[api] Données chargées en amont avec succès : ${sd.calendar.length} GPs, ${sd.drivers_standings?.length ?? 0} pilotes`);
+      // Synchronisation réseau Jolpica / OpenF1 non bloquante en arrière-plan
+      setTimeout(refreshStaticDataBackground, 500);
+      return;
+    }
+  } catch (err) {
+    console.warn("[api] /api/static indisponible au démarrage :", err.message);
+  }
+
+  // 3. Fallback réseau si /api/static n'a pas répondu
+  await fetchAndStoreStaticData();
 }
 
 async function fetchAndStoreStaticData() {
@@ -1173,21 +1211,8 @@ async function _pollLive(sessionKey) {
     }
 
     if (!usedAggregated) {
-      const [posRes, rcRes, wxRes, stintsRes, intervalsRes, lapsRes] = await Promise.allSettled([
-        apiFetch(`${PROXY}/api/last-positions?session_key=${sessionKey}`),
-        apiFetch(`${OPENF1}/race_control?session_key=${sessionKey}`),
-        apiFetch(`${OPENF1}/weather?session_key=${sessionKey}`),
-        apiFetch(`${OPENF1}/stints?session_key=${sessionKey}`),
-        apiFetch(`${OPENF1}/intervals?session_key=${sessionKey}`),
-        apiFetch(`${OPENF1}/laps?session_key=${sessionKey}`),
-      ]);
-
-      positions  = posRes.status       === "fulfilled" ? posRes.value       : [];
-      rcMessages = rcRes.status        === "fulfilled" ? rcRes.value        : [];
-      weatherArr = wxRes.status        === "fulfilled" ? wxRes.value        : [];
-      stints     = stintsRes.status    === "fulfilled" ? stintsRes.value    : [];
-      intervals  = intervalsRes.status === "fulfilled" ? intervalsRes.value : [];
-      laps       = lapsRes.status      === "fulfilled" ? lapsRes.value      : [];
+      // Si l'agrégé échoue ou est vide, ne pas spammer les 6 endpoints individuels.
+      // Le WebSocket télémétrie FastAPI prend le relais pour les données temps réel.
     }
 
     const driversDict = store.drivers || {};

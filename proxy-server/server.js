@@ -35,16 +35,16 @@ const TTL_MAP = {
 };
 const DEFAULT_TTL   = 300;
 const STALE_WINDOW  = 7 * 86_400;
-const REQ_INTERVAL  = 1_100;
+const REQ_INTERVAL  = 100;
 // D3 : grâce maximale au-delà de staleUntil pour le fallback de dernier recours.
 // Au-delà de staleUntil + MAX_EXPIRED_GRACE, on refuse de servir le cache périmé.
 const MAX_EXPIRED_GRACE = 24 * 3600 * 1000; // 24h
 
 const TIMEOUT_MAP = {
-  position:  120_000,
-  laps:      120_000,
-  car_data:   30_000,
-  default:    60_000,
+  position:   2_500,
+  laps:       2_500,
+  car_data:   2_000,
+  default:    2_500,
 };
 
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -111,25 +111,27 @@ function writeCache(key, data, ttlSecs) {
 const reqQueue = [];
 let qRunning   = false;
 
-async function upstreamFetch(url, timeoutMs = TIMEOUT_MAP.default, retries = 3) {
+async function upstreamFetch(url, timeoutMs = TIMEOUT_MAP.default, retries = 1) {
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, {
         headers: { 'User-Agent': 'F1Dashboard-Backend/4.0', 'Accept': 'application/json' },
         signal: AbortSignal.timeout(timeoutMs),
       });
+      if (res.status === 401 || res.status === 403) {
+        // Restriction OpenF1 session live en cours (accès réservé abonnés) : échec immédiat sans retry
+        throw new Error(`HTTP ${res.status} — restricted/paywalled`);
+      }
       if (res.status === 429) {
-        // D1 : à la dernière tentative, on LÈVE au lieu de revenir sans valeur
-        // (sinon upstreamFetch retourne undefined → writeCache(undefined) pollue le cache).
         if (i === retries) throw new Error('HTTP 429 — rate limit épuisé');
-        await new Promise(r => setTimeout(r, Math.pow(2, i) * 3_000));
+        await new Promise(r => setTimeout(r, 400));
         continue;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     } catch (e) {
-      if (i === retries) throw e;
-      await new Promise(r => setTimeout(r, Math.pow(2, i) * 1_000));
+      if (i === retries || e.message.includes('401') || e.message.includes('403')) throw e;
+      await new Promise(r => setTimeout(r, 200));
     }
   }
 }
@@ -513,7 +515,9 @@ async function handleProxy(req, res, upstreamBase, prefixParts) {
       console.warn(`[proxy] Cache expiré servi pour ${endpoint} (erreur upstream: ${e.message})`);
       return sendJSON(res, expired, 200, { 'X-Cache': 'EXPIRED', 'X-Cache-Warning': 'stale-data' });
     }
-    sendJSON(res, { error: e.message, endpoint }, 502);
+    // Ne JAMAIS renvoyer 502 (ce qui déclenche le 503 Standby de Cloudflare)
+    console.warn(`[proxy] Fallback 200 [] servi pour ${endpoint} (${e.message})`);
+    sendJSON(res, [], 200, { 'X-Cache': 'FALLBACK', 'X-Proxy-Warning': 'empty-fallback' });
   }
 }
 
@@ -575,7 +579,15 @@ const server = http.createServer(async (req, res) => {
         serverTime:     new Date().toISOString(),
       }, 200, { 'Cache-Control': 'no-cache' });
     } catch (e) {
-      return sendJSON(res, { error: e.message }, 500);
+      return sendJSON(res, {
+        mode: 'archive',
+        activeSession: null,
+        archiveSession: null,
+        liveSession: null,
+        nextSession: null,
+        serverTime: new Date().toISOString(),
+        error: e.message,
+      }, 200, { 'Cache-Control': 'no-cache' });
     }
   }
 
@@ -656,7 +668,9 @@ const server = http.createServer(async (req, res) => {
       writeCache(cKey, result, 86_400);
       return sendJSON(res, result, 200, { 'X-Cache': 'MISS' });
     } catch (e) {
-      return sendJSON(res, { error: e.message }, 502);
+      const expired = readExpiredCache(cKey);
+      if (expired) return sendJSON(res, expired, 200, { 'X-Cache': 'EXPIRED' });
+      return sendJSON(res, { points: [], count: 0, error: e.message }, 200);
     }
   }
 
@@ -675,7 +689,8 @@ const server = http.createServer(async (req, res) => {
       const result = await fetchLastPositions(sessionKey, TTL_MAP.position);
       return sendJSON(res, result, 200, { 'X-Cache': 'MISS' });
     } catch (e) {
-      return sendJSON(res, { error: e.message }, 502);
+      const exp = readExpiredCache(dedupKey);
+      return sendJSON(res, exp || [], 200, { 'X-Cache': 'FALLBACK' });
     }
   }
 
@@ -732,12 +747,12 @@ const server = http.createServer(async (req, res) => {
           ),
         ]);
 
-      const positions    = posResult.status    === 'fulfilled' ? posResult.value    : [];
-      const intervals    = intResult.status    === 'fulfilled' ? intResult.value    : [];
-      const laps         = lapsResult.status   === 'fulfilled' ? lapsResult.value   : [];
-      const stints       = stintsResult.status === 'fulfilled' ? stintsResult.value : [];
-      const race_control = rcResult.status     === 'fulfilled' ? rcResult.value     : [];
-      const weatherArr   = wxResult.status     === 'fulfilled' ? wxResult.value     : [];
+      const positions    = posResult.status    === 'fulfilled' && Array.isArray(posResult.value) ? posResult.value : [];
+      const intervals    = intResult.status    === 'fulfilled' && Array.isArray(intResult.value) ? intResult.value : [];
+      const laps         = lapsResult.status   === 'fulfilled' && Array.isArray(lapsResult.value) ? lapsResult.value : [];
+      const stints       = stintsResult.status === 'fulfilled' && Array.isArray(stintsResult.value) ? stintsResult.value : [];
+      const race_control = rcResult.status     === 'fulfilled' && Array.isArray(rcResult.value) ? rcResult.value : [];
+      const weatherArr   = wxResult.status     === 'fulfilled' ? wxResult.value : [];
       const weather      = Array.isArray(weatherArr) ? weatherArr[weatherArr.length - 1] || {} : weatherArr || {};
 
       return sendJSON(res, {
@@ -746,8 +761,13 @@ const server = http.createServer(async (req, res) => {
         timestamp: new Date().toISOString(),
       }, 200, { 'Cache-Control': `max-age=${LIVE_TTL}` });
     } catch (e) {
-      // Fallback : retourner ce qu'on a en cache
-      return sendJSON(res, { error: e.message, session_key: sessionKey }, 502);
+      // Fallback : retourner un objet valide 200 OK pour éviter le 503 Standby Cloudflare
+      return sendJSON(res, {
+        positions: [], intervals: [], laps: [], stints: [], race_control: [], weather: {},
+        session_key: sessionKey,
+        timestamp: new Date().toISOString(),
+        fallback: true
+      }, 200, { 'Cache-Control': 'no-cache' });
     }
   }
 
